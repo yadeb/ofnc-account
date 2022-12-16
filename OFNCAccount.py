@@ -1,0 +1,199 @@
+
+
+from fileinput import filename
+import datetime
+import calendar as cal
+#!/usr/bin/env python3
+
+
+    # read all the lines in file
+    # separate the ones that are incomes
+    # separate the ones that are FPI, SO, TFR, BGC PAyment
+        # FPI(Faster Payments Inwards) : usually meetings offerings
+        # SO Standing order
+        # TFR: Transfer between account
+        # BGC: Cheque or cash deposit
+    # Extract the FPI ones as form answers, name, transaction date, purpose, etc
+    # Allow user to select the correct one to save to CQ
+    # All user to save this info into spreadsheet containing original input plus saved CQ details, marking the saved ones as saved
+
+    #####
+        # After breaking down description for income
+            # Separate and mark offering and tithe
+            # Seprate other designated offering
+                # Kunle
+                # IDP
+                # Honorarioum
+            # Use meeting dates to guess the remaining
+    #####
+
+    ## March 3
+        # March bank accout name to Name in CQ
+            # Extract Bank Account First Name Last Name/Initials
+            # Extract CQ Last Name Fist Name/Initials and Title
+            # For each name in Bank Statements find the matching name and number in CQ sheet and save it in spreadsheet with fields
+            # CQF fielsds
+            # "NUMBER","TITLE","FULL_NAME","DATE_RECEIVED","PURPOSE_ITEM (Must Look up Sheet2)","AMOUNT (£)","BRIEF_DESCRIPTION","PAYMENT_TYPE (eg: cheque, electronic transfer, standing order etc)","GIFT_AID? (Yes/No)","DESIGNATED? (Yes/No)""
+            #                   "Name"      "Date"          "Purpose"   "Amount"    "Description"   "Payment Type ie Transaction type", "Gift Aid" "Designated"
+            
+
+import pandas as pd
+import os
+
+ColumnNames = ["Transaction Date", "Transaction Type", "Transaction Description", "Debit Amount", "Credit Amount", "Balance"]
+DecemberRetreatDays = ["11DEC21"]
+WatchNightServiceDates=["01JAN21", "31DEC21"]
+
+def main() :
+    
+    branchMeetingDates = getMeetingDate(2021,cal.SUNDAY,1) + DecemberRetreatDays + WatchNightServiceDates
+
+    #print(branchMeetingDates)
+    #return
+    accountFile = "C:\\Users\\ukyade\\Downloads\\OFNC\\OFNC.csv"
+
+    accountDf = pd.read_csv(accountFile, sep=",", skiprows = 0)
+
+    #print(accountDf.head())
+    FPIDataFrame = accountDf[accountDf['Transaction Type'] == 'FPI']
+    #timeDF = pd.DataFrame(columns = ['Bank Description', 'Time'] )
+
+    # OGUNMODIMU O TITHE DONATION RP4659985468854500 206412     10 04JAN21 08:36
+    # split to 0: OGUNMODIMU O TITHE DONATION RP4659985468854500 206412 10 04JAN21 | 08:36
+    timeDF = FPIDataFrame['Transaction Description'].str.rsplit(n=1, expand=True)
+
+    #timeDF['Transaction Description', "Transaction Time"] = descDF.str.split(n=1)
+    #accountDf['Time'] = timeDF[1]
+
+    # split to OGUNMODIMU O TITHE DONATION RP4659985468854500 206412 10 | 04JAN21  
+    accountDf['Real Date'] = timeDF[0].str.rsplit(n=1, expand=True)[1]
+    # print(accountDf.head(6))
+    # exit()
+    #  OGUNMODIMU | O | TITHE DONATION RP4659985468854500 206412 10 
+    nameDF = timeDF[0].str.split(n=2, expand=True) 
+    accountDf['Name'] = nameDF[0] + " " + nameDF[1]
+
+    # split to OGUNMODIMU O TITHE DONATION | RP4659985468854500 | 206412| 10 | 04JAN21 
+    # Second split OGUNMODIMU | O | TITHE DONATION
+    accountDf['Bank Description'] = timeDF[0].str.rsplit(n=4, expand=True)[0].str.split(n=2, expand=True)[2]
+
+    # Insert empty column at the last column
+    accountDf.insert(len(accountDf.columns), 'Purpose',"")
+
+    # Do for standing orders
+    soDF = accountDf[accountDf['Transaction Type'] == 'SO']
+    splitDesc = soDF['Transaction Description'].str.split(n=2, expand=True)
+    accountDf.loc[soDF.index, 'Name'] = splitDesc[0] + " " + splitDesc[1]
+    accountDf.loc[soDF.index, 'Bank Description'] = splitDesc[2]
+    #accountDf.loc[soDF.index, 'Real Date'] = soDF['Date']
+
+    #accountDf.loc[(soDF[ soDF['Bank Description'].str.contains("OFFERING|TITHE") == True]).index, 'Purpose'] = "Tithes and Offering"
+
+    # Get all tithe and offering
+        #Get all income
+    incomeDF = accountDf[accountDf['Credit Amount'].notnull()]
+    accountDf.loc[(incomeDF[incomeDF['Bank Description'].str.contains("OFFERING|TITHE") == True]).index, 'Purpose'] = "Tithes and Offering"
+    FPIDataFrame = incomeDF[(incomeDF['Transaction Type'] == 'FPI') & (incomeDF['Bank Description'].str.contains("OFFERING|TITHE") == True)]
+    descDF = FPIDataFrame['Real Date'].isin(branchMeetingDates)
+    accountDf.loc[descDF[descDF == True].index, 'Description'] = "MANCHESTER BRANCH MEETINGS"
+
+    accountDf.loc[(incomeDF[incomeDF['Transaction Description'].str.contains("STWDSHP") == True]).index, ['Purpose', 'Description']] =  ["Tithes and Offering", "Stewardship Tithes and Offering"]
+    accountDf.loc[(incomeDF[incomeDF['Transaction Type'] == 'DEP']).index, ['Purpose', 'Description']] = ["Tithes and Offering", "Tithes and Offering Desc"]
+
+
+
+    FPIDataFrame = accountDf[(accountDf['Transaction Type'] == 'FPI') & (accountDf['Purpose'] == '')]
+    #print((purposeDF[ purposeDF['Bank Description'].str.contains("KUNLE|IDP") == True]).index.values)
+    accountDf.loc[(FPIDataFrame[ FPIDataFrame['Bank Description'].str.contains("IDC|IDP|HONORARIUM|HONOURARIUM|BENEVOLENCE") == True]).index, 'Purpose'] = "Benevolence"
+    #IDP Xmas Gift
+    accountDf.loc[(FPIDataFrame[ FPIDataFrame['Bank Description'].str.contains("IDP") == True]).index, 'Description'] = "IDP Xmas Gift"
+    accountDf.loc[(FPIDataFrame[ FPIDataFrame['Bank Description'].str.contains("POSTAGE | SHIPPING") == True]).index, ['Purpose', 'Description']] = ["Benevolence", "IDP Donation Shipping"]
+    accountDf.loc[(FPIDataFrame[ FPIDataFrame['Bank Description'].str.contains("HONORARIUM|HONOURARIUM") == True]).index, 'Description'] = "Donation for Honourarium"
+    accountDf.loc[(FPIDataFrame[ FPIDataFrame['Bank Description'].str.contains("BENEVOLENCE") == True]).index, 'Description'] = "Benevolence"
+
+    FPIDataFrame = accountDf[(accountDf['Transaction Type'] == 'FPI') & (accountDf['Purpose'] == '')]
+    accountDf.loc[(FPIDataFrame[ FPIDataFrame['Bank Description'].str.contains("KUNLE|BRO\ K") == True]).index, ['Purpose', 'Description']] = ["Welfare", "Benevolence & Welfare"]
+
+    #Refund
+    accountDf.loc[(incomeDF[ (incomeDF['Purpose'] == '') & (incomeDF['Transaction Type'] == 'TFR') &
+                     (incomeDF['Transaction Description'].str.contains("REFUND") == True)]).index, ['Purpose', 'Description']] = ["Top House Refund", "Top House Refund"]
+
+    # Get all data without Purpose deposited on Meeting days
+    noPurposeDF = accountDf[(accountDf['Transaction Type'] == 'FPI') & (accountDf['Purpose'] == '')]
+    noPurposeDF = noPurposeDF['Real Date'].isin(branchMeetingDates)
+    accountDf.loc[noPurposeDF[noPurposeDF == True].index, ['Purpose', 'Description']] = ["Tithes and Offering", "MANCHESTER BRANCH MEETINGS"]
+    #accountDf.loc[noPurposeDF[noPurposeDF == True].index, 'Description'] = "MANCHESTER BRANCH MEETINGS"
+
+            # Do Watch night service
+    noPurposeDF = accountDf[(accountDf['Transaction Type'] == 'FPI')]
+    accountDf.loc[noPurposeDF.loc[noPurposeDF['Real Date'] == WatchNightServiceDates[-2]].index, 'Description'] = "Watchnight Service 2021"
+    accountDf.loc[noPurposeDF.loc[noPurposeDF['Real Date'] == WatchNightServiceDates[-1]].index, 'Description'] = "Watchnight Service 2022"
+
+
+    # Just fill the rest as Tithes and Offering
+    noPurposeDF =  accountDf[(accountDf['Transaction Type'] == 'FPI') & (accountDf['Purpose'] == '')]
+    accountDf.loc[noPurposeDF.index, ['Purpose', 'Description', 'Please Check']] = ["Tithes and Offering", "Tithes and Offering", "Yes"]
+    #accountDf.loc[noPurposeDF.index, 'Purpose'] = "Tithes and Offering"
+
+    #Description fields
+    noPurposeDF =  accountDf[(accountDf['Transaction Type'] == 'FPI')]
+    accountDf.loc[accountDf[
+                                ((accountDf['Bank Description'].str.contains('RETREAT') == True) |
+                                (noPurposeDF['Real Date'].str == DecemberRetreatDays[0]))].index, 'Description'] = "December Retreat Offering"
+    #print(accountDf.loc[accountDf['Description'].isnull() & (accountDf['Purpose'] == "Tithes and Offering")])
+    #exit()
+    accountDf.loc[accountDf[(accountDf['Description'].isnull()) & (accountDf['Purpose'] == "Tithes and Offering")].index, 'Description'] = "Tithes and Offering"
+
+
+
+    accountDf.to_csv(os.path.splitext(accountFile)[0] + "OFNCExpand4.csv")
+    exit()
+    purposeDF['Purpose'] = purposeDF[ purposeDF['Bank Description'].str.contains("KUNLE|IDP") == True]['Bank Description']
+   
+    purposeDF['Purpose'] = purposeDF.where(pd.isnull(purposeDF['Purpose']), "Benevolence")['Purpose']
+    purposeDF['Purpose'] = purposeDF.where(purposeDF['Bank Description'].str.contains("OFFERING|TITHE") == False ,
+                                        "Tithes and Offering")['Purpose']
+
+    # Do Standing order
+    soDF = accountDf[accountDf['Transaction Type'] == 'SO']
+    #soDF['Purpose'] = soDF.where(soDF['Transaction Type'].str.contains("OFFERING|TITHE") == False,"Tithes and Offering")['Purpose']
+
+    print(soDF.index.values)#[purposeDF['Purpose'].isnull()])
+
+    accountDf['Purpose'] = purposeDF['Purpose']
+
+    #accountDf.to_csv(os.path.splitext(accountFile)[0] + "OFNCExpand.csv")
+    #print(descDF['Transaction Description'].split()[-1])
+
+    # Split Transaction Description
+
+    return
+
+def getMeetingDate(year, dayNum, frequency) :
+    #print(datetime.date(year,1, 1))
+    #print(dayNum)
+
+    dateList = []
+    for i in range(1,13) :
+        n = 0
+        index = 0
+        while n < frequency:
+            if(cal.monthcalendar(year, i)[1][dayNum]) :
+                n += 1
+
+            index += 1
+
+
+        sundayDate = datetime.date(year,i,cal.monthcalendar(year, i)[index][dayNum]).strftime("%d%b%y").upper()
+        dateList.append(sundayDate)
+
+    #print(dateList)
+    return dateList
+
+
+if __name__ == '__main__':
+    main()
+
+
+    # Bank name format if one letter it is initial, otherwise it is last name
+    # OFNC NAme if it has initial set initial, else it is last name first name
