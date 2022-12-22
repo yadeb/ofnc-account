@@ -3,6 +3,9 @@
 # from fileinput import filename
 import datetime
 import calendar as cal
+import re
+import sys
+
 import pandas as pd
 from pandas import DataFrame
 
@@ -46,7 +49,8 @@ ColumnNames = ["Transaction Date", "Transaction Type", "Transaction Description"
 DecemberRetreatDays = ["11DEC21"]
 WatchNightServiceDates = ["01JAN21", "31DEC21"]
 CQ_INCOME_TEMPLATE = []
-
+cq_name_col = ""
+bank_name_col = 'BANK_NAME'
 
 def load_cq_template() -> type[DataFrame]:
     pd.set_option('display.max_columns', None)
@@ -63,28 +67,87 @@ def load_cq_template() -> type[DataFrame]:
 def get_cq_name(bank_name):
     new_df = pd.DataFrame(columns=['Bank Name', 'CQ_Name'])
     cq_df = load_cq_template()
+    global cq_name_col
     cq_name_col = cq_df.columns[1]
-    bank_name_col = 'BANK_NAME'
+    # bank_name_col = 'BANK_NAME'
     cq_df[bank_name_col] = "none"
     cq_names = cq_df[cq_name_col]
     for name in bank_name:
         if isinstance(name, str):
-            #print(cq_df.columns)
-            # cq_df[bank_name_col] = ""
+            # print(cq_df.columns)
             out_df = cq_df.loc[cq_df[cq_name_col].str.contains(name) & (cq_df[bank_name_col] == "none")]
 
-            if out_df.shape[0] > 0:
-                cq_df.at[out_df.index[0], bank_name_col] = name
-                # print(cq_df.at[out_df.index[0], bank_name_col])
-                if out_df.shape[0] > 1:
-                    print(name, "has ", len(out_df.shape), " matches")
+            if name_in_cq(cq_df, name, name, False):
+                pass
             else:
-                print("No matching values for: ", name)
+                print("No matching values for: ", name, " Trying reordering")
+                # Now lets try and turn them round if its initials and a last name
+                names = name.split()
+                if len(names) == 2:
+                    new_name = names[1] + " " + names[0]
+                    if name_in_cq(cq_df, new_name, name):
+                        print("+++ Found Name by re-ordering", new_name)
+                    else:
+                        print("No matching values for reordered: ", name, " try last name")
+                        continue
+                        # Now lets try and use last name only if you can find it
+                        # split name by space
+
+                        test_last_name = max(names,
+                                             key=len)  # find which one is longest, assuming one of them is initial
+                        out_df = cq_df.loc[
+                            cq_df[cq_name_col].str.contains(test_last_name) & (cq_df[bank_name_col] == "none")]
+                        if name_in_cq(cq_df, test_last_name, name):
+                            pass
+                        else:
+                            print("No matching values for: ", name, " using last name:", test_last_name)
+
+                else:
+                    print("Bank name length is more than 2, length is:", len(names))
+
+
+
 
     print(cq_df.loc[(cq_df[bank_name_col] != "none"), (cq_name_col, bank_name_col)])
 
     # print(type(cq_names), type(cq_df))
     return new_df
+
+
+def name_in_cq(cq_df, name, bank_name, try_reorder = False):
+    try:
+        out_df = cq_df.loc[cq_df[cq_name_col].str.contains(name) & (cq_df[bank_name_col] == "none")]
+    except re.error:
+        return False
+
+    full_name = name
+    if out_df.shape[0] == 0 and try_reorder:
+        print("No matching values for: ", name, " Trying reordering")
+        re_ordered, full_name = try_reorder_name(full_name)
+        if re_ordered:
+            try:
+                out_df = cq_df.loc[cq_df[cq_name_col].str.contains(full_name) & (cq_df[bank_name_col] == "none")]
+            except re.error:
+                return False
+
+    if out_df.shape[0] > 0:
+        cq_df.at[out_df.index[0], bank_name_col] = bank_name
+        # print(cq_df.at[out_df.index[0], bank_name_col])
+        if out_df.shape[0] > 1:
+            print(name, "has ", len(out_df.shape), " matches")
+
+        return True
+
+    return False
+
+
+def try_reorder_name(full_name):
+    names = full_name.split()
+    if len(names) == 2:
+        full_name = names[1] + " " + names[0]
+        return True, full_name
+
+    return False, full_name
 
 def get_name_from_cq(bank_name):
     new_df = pd.DataFrame(columns=['Bank Name', 'CQ_Name'])
