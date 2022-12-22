@@ -1,10 +1,13 @@
 
 
-from fileinput import filename
+# from fileinput import filename
 import datetime
 import calendar as cal
-#!/usr/bin/env python3
+import pandas as pd
+from pandas import DataFrame
 
+# import os
+# !/usr/bin/env python3
 
     # read all the lines in file
     # separate the ones that are incomes
@@ -37,15 +40,79 @@ import calendar as cal
             #                   "Name"      "Date"          "Purpose"   "Amount"    "Description"   "Payment Type ie Transaction type", "Gift Aid" "Designated"
             
 
-import pandas as pd
-import os
+
 
 ColumnNames = ["Transaction Date", "Transaction Type", "Transaction Description", "Debit Amount", "Credit Amount", "Balance"]
 DecemberRetreatDays = ["11DEC21"]
-WatchNightServiceDates=["01JAN21", "31DEC21"]
+WatchNightServiceDates = ["01JAN21", "31DEC21"]
+CQ_INCOME_TEMPLATE = []
 
-def main() :
-    
+
+def load_cq_template() -> type[DataFrame]:
+    pd.set_option('display.max_columns', None)
+    income_template_file = "C:\\Users\\ukyade\\Downloads\\OFNC\\inc_upload_manchester_template.xlsx"
+    print("Loading CQ file from ", income_template_file)
+    cq_inc_df = pd.read_excel(income_template_file, index_col=0, skiprows=4)
+    # print(cq_inc_df.head(5))
+    CQ_INCOME_TEMPLATE = cq_inc_df.columns
+    return cq_inc_df
+
+
+# Get the cq_name of a name from bank statement
+# if name found then mark it as used in the CQ list so we don't link it again
+def get_cq_name(bank_name):
+    new_df = pd.DataFrame(columns=['Bank Name', 'CQ_Name'])
+    cq_df = load_cq_template()
+    name_col_index = cq_df.columns[1]
+    bank_name_col = 'BANK_NAME'
+    cq_df[bank_name_col] = "none"
+    cq_names = cq_df[name_col_index]
+    for name in bank_name:
+        if isinstance(name, str):
+            #print(cq_df.columns)
+            # cq_df[bank_name_col] = ""
+            out_df = cq_df.loc[cq_df[name_col_index].str.contains(name) & (cq_df[bank_name_col] == "none")]
+            # out_df = cq_df.where(cq_df[cq_df.columns[1]].str.contains(name))
+            # soDF['Purpose'] = soDF.where(soDF['Transaction Type'].str.contains("OFFERING|TITHE") == False,"Tithes and Offering")['Purpose']
+            if out_df.shape[0] > 0:
+                # print(out_df.iloc[0].FULL_NAME)
+                # print(cq_df.loc[out_df.index[0]])
+                # print(out_df.iloc[[0]]['FULL_NAME'])
+                # cq_df[bank_name_col] = out_df.iloc[[0]]['FULL_NAME']
+                cq_df.at[out_df.index[0], bank_name_col] = name
+                print(cq_df.at[out_df.index[0], bank_name_col])
+                if out_df.shape[0] > 1:
+                    print(name, "has ", len(out_df.shape), " matches")
+            else:
+                print("No matching values for: ", name)
+
+            break
+        # for index, cq_name in cq_names.items():
+        #     if isinstance(name, str) and name in cq_name:
+        #         print(name, " CQ is ", cq_name)
+        # # print(name)
+
+    # print(type(cq_names), type(cq_df))
+    return new_df
+
+def get_name_from_cq(bank_name):
+    new_df = pd.DataFrame(columns=['Bank Name', 'CQ_Name'])
+    cq_df = load_cq_template()
+    cq_names = cq_df[cq_df.columns[1]]
+    for name in bank_name:
+        for index, cq_name in cq_names.items():
+            if isinstance(name, str) and name in cq_name:
+                print(name, " CQ is ", cq_name)
+        # print(name)
+
+    print(type(cq_names), type(cq_df))
+    return new_df
+
+
+def main():
+    cq_income_df = load_cq_template()
+    full_name_list = cq_income_df[cq_income_df.columns[1]]
+    # print(full_name_list.to_list())
     branchMeetingDates = getMeetingDate(2021,cal.SUNDAY,1) + DecemberRetreatDays + WatchNightServiceDates
 
     #print(branchMeetingDates)
@@ -122,34 +189,36 @@ def main() :
     noPurposeDF = accountDf[(accountDf['Transaction Type'] == 'FPI') & (accountDf['Purpose'] == '')]
     noPurposeDF = noPurposeDF['Real Date'].isin(branchMeetingDates)
     accountDf.loc[noPurposeDF[noPurposeDF == True].index, ['Purpose', 'Description']] = ["Tithes and Offering", "MANCHESTER BRANCH MEETINGS"]
-    #accountDf.loc[noPurposeDF[noPurposeDF == True].index, 'Description'] = "MANCHESTER BRANCH MEETINGS"
+    # accountDf.loc[noPurposeDF[noPurposeDF == True].index, 'Description'] = "MANCHESTER BRANCH MEETINGS"
 
-            # Do Watch night service
+    # Do Watch night service
     noPurposeDF = accountDf[(accountDf['Transaction Type'] == 'FPI')]
     accountDf.loc[noPurposeDF.loc[noPurposeDF['Real Date'] == WatchNightServiceDates[-2]].index, 'Description'] = "Watchnight Service 2021"
     accountDf.loc[noPurposeDF.loc[noPurposeDF['Real Date'] == WatchNightServiceDates[-1]].index, 'Description'] = "Watchnight Service 2022"
 
-
     # Just fill the rest as Tithes and Offering
     noPurposeDF =  accountDf[(accountDf['Transaction Type'] == 'FPI') & (accountDf['Purpose'] == '')]
     accountDf.loc[noPurposeDF.index, ['Purpose', 'Description', 'Please Check']] = ["Tithes and Offering", "Tithes and Offering", "Yes"]
-    #accountDf.loc[noPurposeDF.index, 'Purpose'] = "Tithes and Offering"
+    # accountDf.loc[noPurposeDF.index, 'Purpose'] = "Tithes and Offering"
 
-    #Description fields
-    noPurposeDF =  accountDf[(accountDf['Transaction Type'] == 'FPI')]
+    # Description fields
+    noPurposeDF = accountDf[(accountDf['Transaction Type'] == 'FPI')]
     accountDf.loc[accountDf[
                                 ((accountDf['Bank Description'].str.contains('RETREAT') == True) |
                                 (noPurposeDF['Real Date'].str == DecemberRetreatDays[0]))].index, 'Description'] = "December Retreat Offering"
-    #print(accountDf.loc[accountDf['Description'].isnull() & (accountDf['Purpose'] == "Tithes and Offering")])
-    #exit()
+    # print(accountDf.loc[accountDf['Description'].isnull() & (accountDf['Purpose'] == "Tithes and Offering")])
+    # exit()
     accountDf.loc[accountDf[(accountDf['Description'].isnull()) & (accountDf['Purpose'] == "Tithes and Offering")].index, 'Description'] = "Tithes and Offering"
 
-
-
-    accountDf.to_csv(os.path.splitext(accountFile)[0] + "OFNCExpand4.csv")
+    #accountDf.to_csv(os.path.splitext(accountFile)[0] + "OFNCExpand5.csv")
+    group_df = accountDf.groupby(['Name'])
+    name_list = accountDf['Name'].unique()
+    # print(name_list)
+    get_cq_name(name_list)
     exit()
+
     purposeDF['Purpose'] = purposeDF[ purposeDF['Bank Description'].str.contains("KUNLE|IDP") == True]['Bank Description']
-   
+
     purposeDF['Purpose'] = purposeDF.where(pd.isnull(purposeDF['Purpose']), "Benevolence")['Purpose']
     purposeDF['Purpose'] = purposeDF.where(purposeDF['Bank Description'].str.contains("OFFERING|TITHE") == False ,
                                         "Tithes and Offering")['Purpose']
