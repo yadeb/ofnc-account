@@ -63,34 +63,25 @@ def load_cq_template() -> type[DataFrame]:
 def get_cq_name(bank_name):
     new_df = pd.DataFrame(columns=['Bank Name', 'CQ_Name'])
     cq_df = load_cq_template()
-    name_col_index = cq_df.columns[1]
+    cq_name_col = cq_df.columns[1]
     bank_name_col = 'BANK_NAME'
     cq_df[bank_name_col] = "none"
-    cq_names = cq_df[name_col_index]
+    cq_names = cq_df[cq_name_col]
     for name in bank_name:
         if isinstance(name, str):
             #print(cq_df.columns)
             # cq_df[bank_name_col] = ""
-            out_df = cq_df.loc[cq_df[name_col_index].str.contains(name) & (cq_df[bank_name_col] == "none")]
-            # out_df = cq_df.where(cq_df[cq_df.columns[1]].str.contains(name))
-            # soDF['Purpose'] = soDF.where(soDF['Transaction Type'].str.contains("OFFERING|TITHE") == False,"Tithes and Offering")['Purpose']
+            out_df = cq_df.loc[cq_df[cq_name_col].str.contains(name) & (cq_df[bank_name_col] == "none")]
+
             if out_df.shape[0] > 0:
-                # print(out_df.iloc[0].FULL_NAME)
-                # print(cq_df.loc[out_df.index[0]])
-                # print(out_df.iloc[[0]]['FULL_NAME'])
-                # cq_df[bank_name_col] = out_df.iloc[[0]]['FULL_NAME']
                 cq_df.at[out_df.index[0], bank_name_col] = name
-                print(cq_df.at[out_df.index[0], bank_name_col])
+                # print(cq_df.at[out_df.index[0], bank_name_col])
                 if out_df.shape[0] > 1:
                     print(name, "has ", len(out_df.shape), " matches")
             else:
                 print("No matching values for: ", name)
 
-            break
-        # for index, cq_name in cq_names.items():
-        #     if isinstance(name, str) and name in cq_name:
-        #         print(name, " CQ is ", cq_name)
-        # # print(name)
+    print(cq_df.loc[(cq_df[bank_name_col] != "none"), (cq_name_col, bank_name_col)])
 
     # print(type(cq_names), type(cq_df))
     return new_df
