@@ -51,6 +51,7 @@ WatchNightServiceDates = ["01JAN21", "31DEC21"]
 CQ_INCOME_TEMPLATE = []
 cq_name_col = ""
 bank_name_col = 'BANK_NAME'
+MINIMUM_NAME_LENGTH = 2
 
 def load_cq_template() -> type[DataFrame]:
     pd.set_option('display.max_columns', None)
@@ -63,7 +64,7 @@ def load_cq_template() -> type[DataFrame]:
 
 
 # Get the cq_name of a name from bank statement
-# if name found then mark it as used in the CQ list so we don't link it again
+# if name found then mark it as used in the CQ list, so we don't link it again
 def get_cq_name(bank_name):
     new_df = pd.DataFrame(columns=['Bank Name', 'CQ_Name'])
     cq_df = load_cq_template()
@@ -75,32 +76,36 @@ def get_cq_name(bank_name):
     for name in bank_name:
         if isinstance(name, str):
             # print(cq_df.columns)
-            out_df = cq_df.loc[cq_df[cq_name_col].str.contains(name) & (cq_df[bank_name_col] == "none")]
-
-            if name_in_cq(cq_df, name, name, False):
+            if name_in_cq(cq_df, name, name, True):
                 pass
             else:
-                print("No matching values for: ", name, " Trying reordering")
                 # Now lets try and turn them round if its initials and a last name
                 names = name.split()
                 if len(names) == 2:
-                    new_name = names[1] + " " + names[0]
-                    if name_in_cq(cq_df, new_name, name):
-                        print("+++ Found Name by re-ordering", new_name)
-                    else:
-                        print("No matching values for reordered: ", name, " try last name")
-                        continue
+                    if len(names[0]) == 1 or len(names[1]) == 1:
+                        print("No matching values for: ", name, " Trying Last Name")
                         # Now lets try and use last name only if you can find it
                         # split name by space
-
                         test_last_name = max(names,
                                              key=len)  # find which one is longest, assuming one of them is initial
-                        out_df = cq_df.loc[
-                            cq_df[cq_name_col].str.contains(test_last_name) & (cq_df[bank_name_col] == "none")]
-                        if name_in_cq(cq_df, test_last_name, name):
+                        if len(test_last_name) > MINIMUM_NAME_LENGTH and name_in_cq(cq_df, test_last_name, name, False, "**"):
                             pass
                         else:
                             print("No matching values for: ", name, " using last name:", test_last_name)
+                    else:
+                        # No initial, try guessing last name and initial
+                        test_last_name_with_initial = names[0] + " " + names[1][0]
+                        if name_in_cq(cq_df, test_last_name_with_initial, name, True, "+++"):
+                            print("Name found by guessing initial as:", test_last_name_with_initial)
+                        else:
+                            test_last_name_with_initial = names[1] + " " + names[0][0]
+                            if name_in_cq(cq_df, test_last_name_with_initial, name, True, "==="):
+                                print("Name found second try at guessing initial as:", test_last_name_with_initial)
+                            else:
+                                # This is really pushing it now just find any of the names
+                                pass
+
+
 
                 else:
                     print("Bank name length is more than 2, length is:", len(names))
@@ -114,7 +119,14 @@ def get_cq_name(bank_name):
     return new_df
 
 
-def name_in_cq(cq_df, name, bank_name, try_reorder = False):
+
+# Check if name can be found in dataframe list from CQ cq_df
+# cq_df
+# name: Name to search from
+# bank_name: Original version of name as retrieved from bank database
+# try_reorder: Try to search for name by changing the order of first and last if not found the first time
+# suffix: Append the name with this value in the final list
+def name_in_cq(cq_df, name, bank_name, try_reorder = False, suffix =""):
     try:
         out_df = cq_df.loc[cq_df[cq_name_col].str.contains(name) & (cq_df[bank_name_col] == "none")]
     except re.error:
@@ -130,8 +142,12 @@ def name_in_cq(cq_df, name, bank_name, try_reorder = False):
             except re.error:
                 return False
 
+            if(out_df.shape[0] > 0):
+                print("+++ Found Name by re-ordering", full_name)
+
+
     if out_df.shape[0] > 0:
-        cq_df.at[out_df.index[0], bank_name_col] = bank_name
+        cq_df.at[out_df.index[0], bank_name_col] = bank_name + " " + suffix
         # print(cq_df.at[out_df.index[0], bank_name_col])
         if out_df.shape[0] > 1:
             print(name, "has ", len(out_df.shape), " matches")
