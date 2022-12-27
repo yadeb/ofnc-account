@@ -280,9 +280,9 @@ def main():
     # exit()
     accountDf.loc[accountDf[(accountDf['Description'].isnull()) & (accountDf['Purpose'] == "Tithes and Offering")].index, 'Description'] = "Tithes and Offering"
 
-    #accountDf.to_csv(os.path.splitext(accountFile)[0] + "OFNCExpand5.csv")
-    group_df = accountDf.groupby(['Name'])
-    name_list = accountDf['Name'].unique()
+    # accountDf.to_csv(os.path.splitext(accountFile)[0] + "OFNCExpand5.csv")
+    # group_df = accountDf.groupby(['Name'])
+    name_list = accountDf['Name'].dropna().unique()
     # print(name_list)
     get_cq_name(name_list)
     exit()
