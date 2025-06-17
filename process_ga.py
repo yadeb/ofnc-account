@@ -8,6 +8,9 @@ DESCRIPTION_FIELD = "Transaction Description"
 PURPOSE_FIELD = "Purpose"
 AMOUNT_FIELD = "Amount"
 DESC_NAME_FIELD = "Description_Name"
+FIRST_NAME_FIELD = "First Name"
+LAST_NAME_FIELD = "Last Name"
+FULL_NAME_FIELD = "Full Name"
 
 def print_progress(message):
     """Prints a progress message to the console."""
@@ -16,8 +19,30 @@ def print_progress(message):
 def process_data() -> pd.DataFrame:
     # Load the bank statement and members list
     print_progress("Loading bank statement and members list...")
-    bank_df = pd.read_excel("bank_statement.xlsx")
+    bank_df = load_and_clean_statement("bank_statement.xlsx")
+    print_progress(f"Process Data: Loaded bank statement data shape: {bank_df.shape}")
+
     members_df = pd.read_excel("members_list.xlsx")
+    print_progress(f"Process Data: Loaded members list data shape: {members_df.shape}")
+
+    #  Clean up the memebers list drop duplicate rowas with the same First Name and Last Name, keep the last occurrence with the most recent Start Time column
+    members_df.drop_duplicates(subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD], keep='last', inplace=True)
+    print_progress(f"Process Data: Members list data shape after dropping duplicates: {members_df.shape}")
+
+    # Match the Description_Name with member names in the members list and create a new column Matched Member with the matched name and the ID from the members list
+    members_df[FULL_NAME_FIELD] = members_df[FIRST_NAME_FIELD].str.strip() + " " + members_df[LAST_NAME_FIELD].str.strip()
+    member_names = members_df[FULL_NAME_FIELD].tolist()
+    bank_df['Matched Member'] = bank_df[DESC_NAME_FIELD].astype(str).apply(lambda x: process.extractOne(x, member_names, scorer=fuzz.partial_ratio)[0] if isinstance(x, str) else None)
+
+    bank_df['Matched Member ID'] = bank_df['Matched Member'].apply(lambda x: members_df[members_df[FULL_NAME_FIELD] == x]['ID'].values[0] if x in members_df[FULL_NAME_FIELD].values else None)
+    return bank_df
+    #  Write the processed bank_df to an Excel file
+    # bank_df.to_excel("processed_bank_statement.xlsx", index=False)
+
+def load_and_clean_statement(eoy_file: str) -> pd.DataFrame:
+    """Load and process the bank statement from the given file."""
+    print_progress("Loading bank statement...")
+    bank_df = pd.read_excel(eoy_file)
     print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
 
     # mark the description field as a string to avoid issues with mixed types
@@ -57,33 +82,15 @@ def process_data() -> pd.DataFrame:
     # Sum amounts by Description_Name
     bank_df = bank_df.groupby(DESC_NAME_FIELD, as_index=False)[AMOUNT_FIELD].sum()
     print_progress("Grouped bank statement data by Description_Name and summed amounts.")
-    return bank_df
 
-    #  Clean up the memebers list drop duplicate rowas with the same First Name and Last Name, keep the last occurrence with the most recent Start Time column
-    members_df.drop_duplicates(subset=['First Name', 'Last Name'], keep='last', inplace=True)
-
-    # Match the Description_Name with member names in the members list and create a new column Matched Member with the matched name and the ID from the members list
-    members_df['Full Name'] = members_df['First Name'].str.strip() + " " + members_df['Last Name'].str.strip()
-    member_names = members_df['Full Name'].tolist()
-    bank_df['Matched Member'] = bank_df[DESC_NAME_FIELD].astype(str).apply(lambda x: process.extractOne(x, member_names, scorer=fuzz.partial_ratio)[0] if isinstance(x, str) else None)
-
-    bank_df['Matched Member ID'] = bank_df['Matched Member'].apply(lambda x: members_df[members_df['Full Name'] == x]['ID'].values[0] if x in members_df['Full Name'].values else None)
-
-    #  Write the processed bank_df to an Excel file
-    bank_df.to_excel("processed_bank_statement.xlsx", index=False)
-
-def load_and_clean_statement(eoy_file: str) -> pd.DataFrame:
-    """Load and process the bank statement from the given file."""
-    print_progress(f"Loading bank statement from {eoy_file}...")
-    bank_df = pd.read_excel(eoy_file, "EOY 2023 MCR", header=None)
     print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
     return bank_df
 
 if __name__ == "__main__":
-    bankd_df = process_data()
-    print_progress(f"Processed bank statement data shape: {bankd_df.shape}")
+    bank_df = process_data()
+    print_progress(f"Processed bank statement data shape: {bank_df.shape}")
     #  Write the processed bank_df to an Excel file
-    bankd_df.to_excel("processed_bank_statement.xlsx", index=False)
+    bank_df.to_excel("processed_bank_statement.xlsx", index=False)
     print("Data processing complete. Processed data saved to 'processed_bank_statement.xlsx'.")
 else:
     print("This script is intended to be run as a standalone program.")
