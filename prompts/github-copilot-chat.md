@@ -98,3 +98,53 @@ The app will match payee names from the income spreadsheet (using the transactio
 ---
 
 This plan will result in a user-friendly, privacy-preserving web tool for reconciling and reporting member donations from bank-derived income spreadsheets.
+
+
+
+======================
+# Prototyping Matching Logic in Jupyter Notebook
+
+Prototyping your matching logic in a Jupyter Notebook is a great way to experiment and refine your approach before building a full application. Here’s a step-by-step guide:
+
+1. **Import your data**: Load your income and member spreadsheets into pandas DataFrames.
+2. **Extract payee names**: Parse the transaction description column to extract payee names.
+3. **Clean and normalize names**: Standardize names (e.g., lowercase, remove extra spaces) for better matching.
+4. **Implement matching logic**: Use exact, partial, or fuzzy matching to link payees to members.
+5. **Aggregate results**: Sum donations per matched member.
+6. **Review and refine**: Inspect matches, adjust logic, and handle edge cases.
+7. **Export results**: Save your matched and aggregated data for further use.
+
+You can iterate on each step, visualize results, and document your process—all within the notebook.
+
+```python
+# Example: Prototyping Matching Logic
+
+import pandas as pd
+from fuzzywuzzy import process
+
+# Load data
+income_df = pd.read_csv('income.csv')
+members_df = pd.read_csv('members.csv')
+
+# Extract and clean payee names
+income_df['payee_clean'] = income_df['Transaction Description'].str.lower().str.strip()
+members_df['name_clean'] = members_df['Name'].str.lower().str.strip()
+
+# Fuzzy matching function
+def match_payee(payee, member_names, threshold=80):
+    match, score = process.extractOne(payee, member_names)
+    return match if score >= threshold else None
+
+# Apply matching
+income_df['matched_member'] = income_df['payee_clean'].apply(
+    lambda x: match_payee(x, members_df['name_clean'])
+)
+
+# Merge to get full member details
+result = income_df.merge(members_df, left_on='matched_member', right_on='name_clean', how='left')
+
+# Aggregate donations per member
+donations = result.groupby('Name')['Amount'].sum().reset_index()
+
+# Display results
+donations
