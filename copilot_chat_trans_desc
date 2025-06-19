@@ -1,0 +1,41 @@
+I have bank statement I want to analyse the income so I Iknow how much each payee has paid in the year. This information about payee is in the "Transaction DEscription" field
+Transaction DEscription Can vary depending on the type of income 
+
+
+The Full transaction description for each payment is separated by spaces
+The name is at least the first two words but can be longer in FPI and SO income transaction types
+In FPI after the name comes the reference which is a maximum of 18 characters it can include spaces, numbers, alhabets and special characters 
+If it is FPI the last five words is the transaction details like date, time and some IDS
+If it is SO you don't get the transaction details just a transaction description
+If it is a check deposit you only get an ID which is a number
+The transaction description field doesn't have information about what type of income it is, I can only guess/know by the number of words in the field
+
+Create a python function that takes the a dataframe that containes table with transaction description and amount fields. 
+From this dataframe extract the name into a new column
+
+import pandas as pd
+
+def extract_payee_name(df):
+    def get_name(desc):
+        words = desc.split()
+        n = len(words)
+        # Heuristic: FPI has at least 8 words (name + reference + 5 details)
+        if n >= 8:
+            # Assume last 5 words are transaction details, reference is before that (max 18 chars)
+            main = words[:-5]
+            # Try to find the reference (max 18 chars, can be multiple words)
+            # We'll assume the reference is the last word before the 5 details if it's <= 18 chars
+            # Name is everything before the reference
+            for i in range(len(main)-1, 1, -1):
+                ref_candidate = ' '.join(main[i:])
+                if len(ref_candidate) <= 18:
+                    return ' '.join(main[:i])
+            return ' '.join(main)
+        # Heuristic: Check deposit is "Check Deposit" + ID (2 words)
+        elif n == 2 and words[0].lower() == "check" and words[1].isdigit():
+            return "Check Deposit"
+        # Heuristic: SO or other, name is at least first two words
+        else:
+            return ' '.join(words[:2]) if n >= 2 else desc
+    df['Name'] = df['Transaction Description'].apply(get_name)
+    return df
