@@ -30,6 +30,11 @@ def process_data() -> pd.DataFrame:
     members_df = pd.read_excel("members_list.xlsx")
     print_progress(f"Process Data: Loaded members list data shape: {members_df.shape}")
 
+    #  Normalize the First Name and Last Name columns in the members list
+    members_df[FIRST_NAME_FIELD] = members_df[FIRST_NAME_FIELD].str.strip().str.title()
+    members_df[LAST_NAME_FIELD] = members_df[LAST_NAME_FIELD].str.strip().str.title()
+    print_progress("Process Data: Normalized First Name and Last Name columns in the members list.")
+
     #  Clean up the memebers list drop duplicate rowas with the same First Name and Last Name, keep the last occurrence with the most recent Start Time column
     members_df.drop_duplicates(
         subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD], keep="last", inplace=True
@@ -47,26 +52,30 @@ def process_data() -> pd.DataFrame:
     member_names = members_df[FULL_NAME_FIELD].tolist()
 
     # Extract the first name and last name columns from the members_df into a new df
-    members_name_df = members_df[
-        [FIRST_NAME_FIELD, LAST_NAME_FIELD, MEMBERS_ID_FIELD]
-    ].copy()
-    bank_df[MATCHED_MEMBER_FIELD] = (
-        bank_df[DESC_NAME_FIELD]
-        .astype(str)
-        .apply(
-            lambda x: (
-                manual_match_member(
-                    x,
-                    members_df[FIRST_NAME_FIELD].tolist(),
-                    members_df[LAST_NAME_FIELD].tolist(),
-                    members_name_df,
-                )
-                if isinstance(x, str)
-                else None
-            )
-        )
-    )
+    # members_name_df = members_df[
+    #     [FIRST_NAME_FIELD, LAST_NAME_FIELD, MEMBERS_ID_FIELD]
+    # ].copy()
+    # bank_df[MATCHED_MEMBER_FIELD] = (
+    #     bank_df[DESC_NAME_FIELD]
+    #     .astype(str)
+    #     .apply(
+    #         lambda x: (
+    #             manual_match_member(
+    #                 x,
+    #                 members_df[FIRST_NAME_FIELD].tolist(),
+    #                 members_df[LAST_NAME_FIELD].tolist(),
+    #                 members_name_df,
+    #             )
+    #             if isinstance(x, str)
+    #             else None
+    #         )
+    #     )
+    # )
     # bank_df[MATCHED_MEMBER_ID_FIELD] = bank_df[MATCHED_MEMBER_FIELD].apply(lambda x: members_df[members_df[FULL_NAME_FIELD] == x]['ID'].values[0] if x in members_df[FULL_NAME_FIELD].values else None)
+ 
+    tmp_bank_df = match_payee_to_members(bank_df, members_df)
+    bank_df[MATCHED_MEMBER_FIELD] = tmp_bank_df[MATCHED_MEMBER_FIELD]
+    # bank_df[MATCHED_MEMBER_ID_FIELD] = tmp_bank_df[MATCHED_MEMBER_ID_FIELD]
     return bank_df
     #  Write the processed bank_df to an Excel file
     # bank_df.to_excel("processed_bank_statement.xlsx", index=False)
@@ -99,10 +108,10 @@ def manual_match_member(
             first_name = bank_names[0]
             f_name = matched_rows[FIRST_NAME_FIELD].values[0]
             #  Get the first and last name concatenated with space from the matched rows
-            full_name = f"{f_name} {matched_rows[LAST_NAME_FIELD].values[0]}"
+            full_name = f"{matched_rows[FIRST_NAME_FIELD].values[0]} {matched_rows[LAST_NAME_FIELD].values[0]}"
             if f_name.startswith(first_name[0]):
                 print(
-                    f"Description: {description}, Matched first name: {f_name}, Last name: {matched_rows[LAST_NAME_FIELD].values[0]}"
+                    f"Description1: {description}, Matched first name: {f_name}, Last name: {matched_rows[LAST_NAME_FIELD].values[0]}"
                 )
                 return full_name
             return full_name + " (Check)"
@@ -251,30 +260,45 @@ def match_payee_to_members(
         pd.DataFrame: Updated bank_df with matched full name and ID columns.
     """
     # Create a full name column in the members list
-    members_df["Full Name"] = (
-        members_df["First Name"].str.strip() + " " + members_df["Last Name"].str.strip()
+    members_df[FULL_NAME_FIELD] = (
+        members_df[FIRST_NAME_FIELD].str.strip()
+        + " "
+        + members_df[LAST_NAME_FIELD].str.strip()
     )
+    members_df[FULL_NAME_FIELD] = members_df[FULL_NAME_FIELD].str.lower()
 
     # Convert the full name column to a list for matching
-    member_names = members_df["Full Name"].tolist()
+    member_names = members_df[FULL_NAME_FIELD].tolist()
 
     # Define a function to match payee_name to the members list
     def match_member(payee_name):
         if pd.isnull(payee_name):
             return None, None
         best_match, score, _ = process.extractOne(
-            payee_name, member_names, scorer=fuzz.partial_ratio
+            payee_name.lower(), member_names, scorer=fuzz.partial_ratio
         )
         if score >= 80:  # Set a threshold for matching
+            print_progress(
+                f"Matching payee_name: {payee_name}, Best match: {best_match}, Score: {score}"
+            )
             matched_id = members_df.loc[
-                members_df["Full Name"] == best_match, "ID"
+                members_df[FULL_NAME_FIELD] == best_match, MEMBERS_ID_FIELD
             ].values[0]
             return best_match, matched_id
+        elif score > 50:
+            print_progress(
+                f"Payee name: {payee_name} matched with {best_match} but score is low: {score}"
+            )
+            return best_match, None
+        else:
+            print_progress(
+                f"No good match found for payee_name: {payee_name}, Best match: {best_match}, Score: {score}"
+            )
         return None, None
 
     # Apply the matching function to the payee_name column
-    bank_df["Matched Full Name"], bank_df["Matched ID"] = zip(
-        *bank_df["payee_name"].apply(match_member)
+    bank_df[MATCHED_MEMBER_FIELD], bank_df[MATCHED_MEMBER_ID_FIELD] = zip(
+        *bank_df[DESC_NAME_FIELD].apply(match_member)
     )
 
     return bank_df
