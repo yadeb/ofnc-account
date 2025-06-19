@@ -357,6 +357,11 @@ def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
                 # If the third word is '&' or 'and', we can include it in the name
                 #  Add the third word and fourth word to the name
                 name = name + ' ' + main[2] + ' ' + main[3]
+                return name
+            if len(main) > 3 and main[2] in ['&', '+']: 
+                # If the fourth word is '&' or 'and', it is a joint account with the last name first, get the second initial
+                name = name + ' ' + main[3]
+
             return name # Fallback to first two words if we get here
         elif len(parts) >= 2:
             # Handle SO: name followed by a reference
