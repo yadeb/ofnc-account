@@ -11,6 +11,9 @@ DESC_NAME_FIELD = "Description_Name"
 FIRST_NAME_FIELD = "First Name"
 LAST_NAME_FIELD = "Last Name"
 FULL_NAME_FIELD = "Full Name"
+MATCHED_MEMBER_FIELD = "Matched Member"
+MATCHED_MEMBER_ID_FIELD = "Matched Member ID"
+MEMBERS_ID_FIELD = "ID"
 
 def print_progress(message):
     """Prints a progress message to the console."""
@@ -32,12 +35,77 @@ def process_data() -> pd.DataFrame:
     # Match the Description_Name with member names in the members list and create a new column Matched Member with the matched name and the ID from the members list
     members_df[FULL_NAME_FIELD] = members_df[FIRST_NAME_FIELD].str.strip() + " " + members_df[LAST_NAME_FIELD].str.strip()
     member_names = members_df[FULL_NAME_FIELD].tolist()
-    bank_df['Matched Member'] = bank_df[DESC_NAME_FIELD].astype(str).apply(lambda x: process.extractOne(x, member_names, scorer=fuzz.partial_ratio)[0] if isinstance(x, str) else None)
-
-    bank_df['Matched Member ID'] = bank_df['Matched Member'].apply(lambda x: members_df[members_df[FULL_NAME_FIELD] == x]['ID'].values[0] if x in members_df[FULL_NAME_FIELD].values else None)
+    # bank_df[MATCHED_MEMBER_FIELD] = bank_df[DESC_NAME_FIELD].astype(str).apply(lambda x: process.extractOne(x, member_names, scorer=fuzz.partial_ratio)[0] if isinstance(x, str) else None)
+    # bank_df[MATCHED_MEMBER_FIELD] = bank_df[DESC_NAME_FIELD].astype(str).apply(match_member, member_names=member_names)
+    # Extract the first name and last name columns from the members_df into a new df
+    members_name_df = members_df[[FIRST_NAME_FIELD, LAST_NAME_FIELD, MEMBERS_ID_FIELD]].copy()
+    bank_df[MATCHED_MEMBER_FIELD] = bank_df[DESC_NAME_FIELD].astype(str).apply(lambda x: manual_match_member(x, members_df[FIRST_NAME_FIELD].tolist(), members_df[LAST_NAME_FIELD].tolist(), members_name_df) if isinstance(x, str) else None)
+    # bank_df[MATCHED_MEMBER_ID_FIELD] = bank_df[MATCHED_MEMBER_FIELD].apply(lambda x: members_df[members_df[FULL_NAME_FIELD] == x]['ID'].values[0] if x in members_df[FULL_NAME_FIELD].values else None)
     return bank_df
     #  Write the processed bank_df to an Excel file
     # bank_df.to_excel("processed_bank_statement.xlsx", index=False)
+
+# Implement extract apply functions to match members
+def match_member(description: str, member_names: list) -> str:
+    """Match the description with member names using fuzzy matching."""
+    if pd.isnull(description):
+        return None
+    # best_match, score, _ = process.extractOne(description, member_names, scorer=fuzz.partial_ratio)
+    best_match = process.extract(description, member_names, scorer=fuzz.token_sort_ratio, limit=3)
+    print(f"Description: {description}, Best match: {best_match}, ")
+    # return best_match if score >= 80 else None 
+    return best_match[0][0] if len(best_match) > 0 else None
+
+def manual_match_member(description: str, first_names: list, last_names: list, members_df: pd.DataFrame) -> str:
+    bank_names = description.split()
+    if len(bank_names) == 2:
+        matched_rows = members_df[members_df[LAST_NAME_FIELD].str.lower() ==  bank_names[1].lower()]
+        if len(matched_rows) == 1:
+            # If we have a single match, check if the first name matches
+            first_name = bank_names[0]
+            f_name = matched_rows[FIRST_NAME_FIELD].values[0]
+            #  Get the first and last name concatenated with space from the matched rows
+            full_name = f"{f_name} {matched_rows[LAST_NAME_FIELD].values[0]}"
+            if f_name.startswith(first_name[0]):
+                print(f"Description: {description}, Matched first name: {f_name}, Last name: {matched_rows[LAST_NAME_FIELD].values[0]}")
+                return   full_name
+            return full_name+ " (Check)"
+        elif len(matched_rows) > 1:
+            print(f"Description: {description}, Matched rows: {matched_rows}, but multiple last names match.")
+            # If we have multiple matches, we need to check the first name
+            first_name = bank_names[0]
+            matched_first_name = members_df[members_df[FIRST_NAME_FIELD].str.lower().str.startswith(first_name.lower())]
+            if matched_first_name.empty:
+                print(f"Description: {description}, No first name match found.")
+                return None
+            if len(matched_first_name) == 1:
+                # If we have a single match, return the full name
+                full_name = f"{matched_first_name[FIRST_NAME_FIELD].values[0]} {matched_first_name[LAST_NAME_FIELD].values[0]}"
+                print(f"Description: {description}, Matched first name: {matched_first_name[FIRST_NAME_FIELD].values[0]}, Last name: {matched_first_name[LAST_NAME_FIELD].values[0]}")
+                return full_name
+            else:
+                print(f"Description: {description}, Multiple matches found, but first name does not match.")
+                return None
+    if len(bank_names) == 2:
+        if len(bank_names[0]) == 1:
+            #  If the first name is just a single character, we can assume it's a first name
+            last_name = bank_names[1]
+            # find all last names that match the last name in the bank description
+            matched_last_names = [name for name in last_names if name.lower() == last_name.lower()]
+            if len(matched_last_names) == 1:
+                # Check if the first name starts with the same letter as our first name
+                first_name = bank_names[0]
+                if matched_last_names[0].startswith(first_name[0]):
+                    return matched_last_names[0]
+            return None
+                
+            print(f"Description: {description}, Matched last names: {matched_last_names}")
+    #     last_name_match0 = process.extractOne(bank_names[0], last_names, scorer=fuzz.token_set_ratio)
+    #     last_name_match1 = process.extractOne(bank_names[1], last_names, scorer=fuzz.token_set_ratio)
+    #     print(f"Description: {description}, Last name matches: {last_name_match0}, {last_name_match1}")
+
+    return process.extractOne(description, first_names, scorer=fuzz.partial_ratio)[0] if isinstance(description, str) else None
+
 
 def load_and_clean_statement(eoy_file: str) -> pd.DataFrame:
     """Load and process the bank statement from the given file."""
@@ -85,6 +153,7 @@ def load_and_clean_statement(eoy_file: str) -> pd.DataFrame:
 
     print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
     return bank_df
+
 
 if __name__ == "__main__":
     bank_df = process_data()
