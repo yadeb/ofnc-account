@@ -27,14 +27,17 @@ def process_data() -> pd.DataFrame:
     print_progress("Loading bank statement and members list...")
     bank_df = load_and_clean_statement("bank_statement.xlsx")
     print_progress(f"Process Data: Loaded bank statement data shape: {bank_df.shape}")
-
+ 
+    # Load the members list from an Excel file
     members_df = pd.read_excel("members_list.xlsx")
     print_progress(f"Process Data: Loaded members list data shape: {members_df.shape}")
 
     #  Normalize the First Name and Last Name columns in the members list
     members_df[FIRST_NAME_FIELD] = members_df[FIRST_NAME_FIELD].str.strip().str.title()
     members_df[LAST_NAME_FIELD] = members_df[LAST_NAME_FIELD].str.strip().str.title()
-    print_progress("Process Data: Normalized First Name and Last Name columns in the members list.")
+    print_progress(
+        "Process Data: Normalized First Name and Last Name columns in the members list."
+    )
 
     # Clean up the members list by dropping duplicate rows with the same First Name and Last Name, keeping the last occurrence
     members_df.drop_duplicates(
@@ -54,7 +57,6 @@ def process_data() -> pd.DataFrame:
     tmp_bank_df = match_payee_to_members(bank_df, members_df)
     bank_df[MATCHED_MEMBER_FIELD] = tmp_bank_df[MATCHED_MEMBER_FIELD]
     return bank_df
-
 
 
 def manual_match_member(
@@ -183,13 +185,14 @@ def load_and_clean_statement(eoy_file: str) -> pd.DataFrame:
         f"Bank statement data shape after dropping rows with numeric Description: {bank_df.shape}"
     )
 
-    # From the bank description extract the first two words into a Description_Name column
-    bank_df[DESC_NAME_FIELD] = (
-        bank_df[DESCRIPTION_FIELD]
-        .astype(str)
-        .apply(lambda x: " ".join(x.split()[:2]) if isinstance(x, str) else x)
-    )
+    # # From the bank description extract the first two words into a Description_Name column
+    # bank_df[DESC_NAME_FIELD] = (
+    #     bank_df[DESCRIPTION_FIELD]
+    #     .astype(str)
+    #     .apply(lambda x: " ".join(x.split()[:2]) if isinstance(x, str) else x)
+    # )
 
+    bank_df = extract_payee_name(bank_df)
     print_progress("Extracted Description_Name from bank statement data.")
 
     # Sum amounts by Description_Name
@@ -229,6 +232,7 @@ def match_payee_to_members(
 
     # Convert the full name column to a list for matching
     member_names = members_df[FULL_NAME_FIELD].tolist()
+
     # Define a function to match payee_name to the members list
     def match_member(payee_name: str) -> tuple:
         if pd.isnull(payee_name):
@@ -267,7 +271,8 @@ def match_payee_to_members(
                 last_name = bank_names[1]
                 # find all last names that match the last name in the bank description
                 matched_rows = members_df[
-                    members_df[LAST_NAME_FIELD].str.lower() == last_name.lower()   ]
+                    members_df[LAST_NAME_FIELD].str.lower() == last_name.lower()
+                ]
                 if len(matched_rows) == 1:
                     # If we have a single match, check if the first name matches
                     f_name = matched_rows[FIRST_NAME_FIELD].values[0]
@@ -278,7 +283,10 @@ def match_payee_to_members(
                             f"Matching payee_name: {payee_name}, Matched first name: {f_name}, Last name: {matched_rows[LAST_NAME_FIELD].values[0]}"
                         )
                         return full_name, matched_rows[MEMBERS_ID_FIELD].values[0]
-                    return full_name + " (Check)", matched_rows[MEMBERS_ID_FIELD].values[0]
+                    return (
+                        full_name + " (Check)",
+                        matched_rows[MEMBERS_ID_FIELD].values[0],
+                    )
                 elif len(matched_rows) > 1:
                     print(
                         f"Matching payee_name: {payee_name}, Matched rows: {matched_rows}, but multiple last names match."
@@ -308,7 +316,7 @@ def match_payee_to_members(
                         # return the first match as a fallback
                         full_name = f"{matched_first_name[FIRST_NAME_FIELD].values[0]} {matched_first_name[LAST_NAME_FIELD].values[0]} (Check)"
                         return full_name, matched_first_name[MEMBERS_ID_FIELD].values[0]
-        
+
         return None, None
 
     # Apply the matching function to the payee_name column
@@ -321,6 +329,46 @@ def match_payee_to_members(
 
     return bank_df
 
+
+import pandas as pd
+import re
+
+def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
+    def parse_description(desc: str) -> str:
+        parts = desc.split()
+        
+        # Handle FPI: likely long transaction with structure at the end
+        if len(parts) >= 7:
+            # Assume last 5 words are transaction details, reference is before that (max 18 chars)
+            main = parts[:-5]
+            #  Name will always be at least the first two words
+            # Try to find the reference (max 18 chars, can be multiple words)
+            # We'll assume the reference is the last word before the 5 details if it's <= 18 chars
+            # Name is everything before the reference
+            for i in range(len(main)-1, 1, -1):
+                ref_candidate = ' '.join(main[i:])
+                if len(ref_candidate) == 18:
+                    return ' '.join(main[:i])
+                if len(ref_candidate) > 18:
+                    return ' '.join(main[:i +1])
+            
+            name = ' '.join(main[:2])  # Fallback to first two words if no reference found
+            if len(main) > 3 and main[1] in ['&', '+']:
+                # If the third word is '&' or 'and', we can include it in the name
+                #  Add the third word and fourth word to the name
+                name = name + ' ' + main[2] + ' ' + main[3]
+            return name # Fallback to first two words if we get here
+        elif len(parts) >= 2:
+            # Handle SO: name followed by a reference
+            return " ".join(parts[:2])  # At least the first two words as name
+        elif len(parts) == 1:
+            # Possibly a cheque deposit or one-word name
+            return parts[0]
+        
+        return desc  # Fallback to full description if pattern not matched
+
+    df[DESC_NAME_FIELD] = df[DESCRIPTION_FIELD].apply(parse_description)
+    return df
 
 if __name__ == "__main__":
     bank_df = process_data()
