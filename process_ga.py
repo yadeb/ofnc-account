@@ -269,37 +269,97 @@ def match_payee_to_members(
 
     # Convert the full name column to a list for matching
     member_names = members_df[FULL_NAME_FIELD].tolist()
-
     # Define a function to match payee_name to the members list
-    def match_member(payee_name):
+    def match_member(payee_name: str) -> tuple:
         if pd.isnull(payee_name):
             return None, None
         best_match, score, _ = process.extractOne(
-            payee_name.lower(), member_names, scorer=fuzz.partial_ratio
+            payee_name.lower(), member_names, scorer=fuzz.partial_token_sort_ratio
         )
         if score >= 80:  # Set a threshold for matching
             print_progress(
-                f"Matching payee_name: {payee_name}, Best match: {best_match}, Score: {score}"
+                f"Matching payee_name: {payee_name}, Best match: {best_match.title()}, Score: {score}"
             )
+
             matched_id = members_df.loc[
                 members_df[FULL_NAME_FIELD] == best_match, MEMBERS_ID_FIELD
             ].values[0]
+            #  Convert the best match to title case for consistency
+            best_match = best_match.title()
             return best_match, matched_id
-        elif score > 50:
-            print_progress(
-                f"Payee name: {payee_name} matched with {best_match} but score is low: {score}"
-            )
-            return best_match, None
         else:
             print_progress(
-                f"No good match found for payee_name: {payee_name}, Best match: {best_match}, Score: {score}"
+                f"Matching payee_name: {payee_name}, No match found or score below threshold."
             )
+            # If no match is found, try manual matching
+            return manual_match_member(payee_name)
+
+        return None, None
+
+    #  Try manual matching for failed fuzzy matches
+    def manual_match_member(payee_name: str) -> tuple:
+        if pd.isnull(payee_name):
+            return None, None
+        # Split the payee_name into words
+        bank_names = payee_name.split()
+        if len(bank_names) == 2:
+            #  if the first name is just a single character, we can assume it's a first name
+            if len(bank_names[0]) == 1:
+                inital = bank_names[0]
+                last_name = bank_names[1]
+                # find all last names that match the last name in the bank description
+                matched_rows = members_df[
+                    members_df[LAST_NAME_FIELD].str.lower() == last_name.lower()   ]
+                if len(matched_rows) == 1:
+                    # If we have a single match, check if the first name matches
+                    f_name = matched_rows[FIRST_NAME_FIELD].values[0]
+                    #  Get the first and last name concatenated with space from the matched rows
+                    full_name = f"{matched_rows[FIRST_NAME_FIELD].values[0]} {matched_rows[LAST_NAME_FIELD].values[0]}"
+                    if f_name.lower().startswith(inital[0].lower()):
+                        print(
+                            f"Matching payee_name: {payee_name}, Matched first name: {f_name}, Last name: {matched_rows[LAST_NAME_FIELD].values[0]}"
+                        )
+                        return full_name, matched_rows[MEMBERS_ID_FIELD].values[0]
+                    return full_name + " (Check)", matched_rows[MEMBERS_ID_FIELD].values[0]
+                elif len(matched_rows) > 1:
+                    print(
+                        f"Matching payee_name: {payee_name}, Matched rows: {matched_rows}, but multiple last names match."
+                    )
+                    # If we have multiple matches, we need to check the first name
+                    matched_first_name = members_df[
+                        members_df[FIRST_NAME_FIELD]
+                        .str.lower()
+                        .str.startswith(inital.lower())
+                    ]
+                    if matched_first_name.empty:
+                        print(
+                            f"Matching payee_name: {payee_name}, No first name match found."
+                        )
+                        return None, None
+                    if len(matched_first_name) == 1:
+                        # If we have a single match, return the full name
+                        full_name = f"{matched_first_name[FIRST_NAME_FIELD].values[0]} {matched_first_name[LAST_NAME_FIELD].values[0]}"
+                        print(
+                            f"Matching payee_name: {payee_name}, Matched first name: {matched_first_name[FIRST_NAME_FIELD].values[0]}, Last name: {matched_first_name[LAST_NAME_FIELD].values[0]}"
+                        )
+                        return full_name, matched_first_name[MEMBERS_ID_FIELD].values[0]
+                    else:
+                        print(
+                            f"Matching payee_name: {payee_name}, Multiple matches found, but first name does not match."
+                        )
+                        # return the first match as a fallback
+                        full_name = f"{matched_first_name[FIRST_NAME_FIELD].values[0]} {matched_first_name[LAST_NAME_FIELD].values[0]} (Check)"
+                        return full_name, matched_first_name[MEMBERS_ID_FIELD].values[0]
+        
         return None, None
 
     # Apply the matching function to the payee_name column
     bank_df[MATCHED_MEMBER_FIELD], bank_df[MATCHED_MEMBER_ID_FIELD] = zip(
         *bank_df[DESC_NAME_FIELD].apply(match_member)
     )
+    #  Prunt how many matches were made
+    matched_count = bank_df[MATCHED_MEMBER_FIELD].notnull().sum()
+    print_progress(f"Matched {matched_count} members in the bank statement data.")
 
     return bank_df
 
