@@ -36,7 +36,7 @@ def process_data() -> pd.DataFrame:
     members_df[LAST_NAME_FIELD] = members_df[LAST_NAME_FIELD].str.strip().str.title()
     print_progress("Process Data: Normalized First Name and Last Name columns in the members list.")
 
-    #  Clean up the memebers list drop duplicate rowas with the same First Name and Last Name, keep the last occurrence with the most recent Start Time column
+    # Clean up the members list by dropping duplicate rows with the same First Name and Last Name, keeping the last occurrence
     members_df.drop_duplicates(
         subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD], keep="last", inplace=True
     )
@@ -50,50 +50,11 @@ def process_data() -> pd.DataFrame:
         + " "
         + members_df[LAST_NAME_FIELD].str.strip()
     )
-    member_names = members_df[FULL_NAME_FIELD].tolist()
 
-    # Extract the first name and last name columns from the members_df into a new df
-    # members_name_df = members_df[
-    #     [FIRST_NAME_FIELD, LAST_NAME_FIELD, MEMBERS_ID_FIELD]
-    # ].copy()
-    # bank_df[MATCHED_MEMBER_FIELD] = (
-    #     bank_df[DESC_NAME_FIELD]
-    #     .astype(str)
-    #     .apply(
-    #         lambda x: (
-    #             manual_match_member(
-    #                 x,
-    #                 members_df[FIRST_NAME_FIELD].tolist(),
-    #                 members_df[LAST_NAME_FIELD].tolist(),
-    #                 members_name_df,
-    #             )
-    #             if isinstance(x, str)
-    #             else None
-    #         )
-    #     )
-    # )
-    # bank_df[MATCHED_MEMBER_ID_FIELD] = bank_df[MATCHED_MEMBER_FIELD].apply(lambda x: members_df[members_df[FULL_NAME_FIELD] == x]['ID'].values[0] if x in members_df[FULL_NAME_FIELD].values else None)
- 
     tmp_bank_df = match_payee_to_members(bank_df, members_df)
     bank_df[MATCHED_MEMBER_FIELD] = tmp_bank_df[MATCHED_MEMBER_FIELD]
-    # bank_df[MATCHED_MEMBER_ID_FIELD] = tmp_bank_df[MATCHED_MEMBER_ID_FIELD]
     return bank_df
-    #  Write the processed bank_df to an Excel file
-    # bank_df.to_excel("processed_bank_statement.xlsx", index=False)
 
-
-# Implement extract apply functions to match members
-def match_member(description: str, member_names: list) -> str:
-    """Match the description with member names using fuzzy matching."""
-    if pd.isnull(description):
-        return None
-    # best_match, score, _ = process.extractOne(description, member_names, scorer=fuzz.partial_ratio)
-    best_match = process.extract(
-        description, member_names, scorer=fuzz.token_sort_ratio, limit=3
-    )
-    print(f"Description: {description}, Best match: {best_match}, ")
-    # return best_match if score >= 80 else None
-    return best_match[0][0] if len(best_match) > 0 else None
 
 
 def manual_match_member(
@@ -160,9 +121,6 @@ def manual_match_member(
             print(
                 f"Description: {description}, Matched last names: {matched_last_names}"
             )
-    #     last_name_match0 = process.extractOne(bank_names[0], last_names, scorer=fuzz.token_set_ratio)
-    #     last_name_match1 = process.extractOne(bank_names[1], last_names, scorer=fuzz.token_set_ratio)
-    #     print(f"Description: {description}, Last name matches: {last_name_match0}, {last_name_match1}")
 
     return (
         process.extractOne(description, first_names, scorer=fuzz.partial_ratio)[0]
@@ -279,9 +237,9 @@ def match_payee_to_members(
             payee_name.lower(), member_names, scorer=fuzz.partial_token_sort_ratio
         )
         if score >= 80:  # Set a threshold for matching
-            print_progress(
-                f"Matching payee_name: {payee_name}, Best match: {best_match.title()}, Score: {score}"
-            )
+            # print_progress(
+            #     f"Matching payee_name: {payee_name}, Best match: {best_match.title()}, Score: {score}"
+            # )
 
             matched_id = members_df.loc[
                 members_df[FULL_NAME_FIELD] == best_match, MEMBERS_ID_FIELD
@@ -290,13 +248,11 @@ def match_payee_to_members(
             best_match = best_match.title()
             return best_match, matched_id
         else:
-            print_progress(
-                f"Matching payee_name: {payee_name}, No match found or score below threshold."
-            )
+            # print_progress(
+            #     f"Matching payee_name: {payee_name}, No match found or score below threshold."
+            # )
             # If no match is found, try manual matching
             return manual_match_member(payee_name)
-
-        return None, None
 
     #  Try manual matching for failed fuzzy matches
     def manual_match_member(payee_name: str) -> tuple:
