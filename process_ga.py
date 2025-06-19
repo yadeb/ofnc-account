@@ -14,6 +14,7 @@ FULL_NAME_FIELD = "Full Name"
 MATCHED_MEMBER_FIELD = "Matched Member"
 MATCHED_MEMBER_ID_FIELD = "Matched Member ID"
 MEMBERS_ID_FIELD = "ID"
+DROP_NAMES_LIST = ["NIGHT SAFE", "STWDSHP"]
 
 
 def print_progress(message):
@@ -189,13 +190,14 @@ def load_and_clean_statement(eoy_file: str) -> pd.DataFrame:
         f"Bank statement data shape after dropping NaN in Description or Amount: {bank_df.shape}"
     )
 
-    #  Drop STWDSHP rows from DESCRIPTION_FIELD
-    bank_df = bank_df[
-        ~bank_df[DESCRIPTION_FIELD].str.contains("STWDSHP", case=False, na=False)
-    ]
-    print_progress(
-        f"Bank statement data shape after dropping STWDSHP rows: {bank_df.shape}"
-    )
+    #  Drop rows where the Description contains any of the names in the DROP_NAMES_LIST
+    for name in DROP_NAMES_LIST:
+        bank_df = bank_df[
+            ~bank_df[DESCRIPTION_FIELD].str.contains(name, case=False, na=False)
+        ]
+        print_progress(
+            f"Bank statement data shape after dropping rows with '{name}' in Description: {bank_df.shape}"
+        )
 
     # Drop rows if the Purpose colomn does not contain the word 'Tithe' or 'Offering'
     bank_df = bank_df[
