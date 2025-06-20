@@ -19,6 +19,7 @@ MATCHED_MEMBER_ID_FIELD = "Matched Member ID"
 MEMBERS_ID_FIELD = "ID"
 DROP_NAMES_LIST = ["NIGHT SAFE", "STWDSHP"]
 ALLOWED_PURPOSES = ["Tithe", "Offering", "Donation to Charity"]
+BRANCH_NAME_FIELD = "OFNC Branch"
 
 
 def print_progress(message):
@@ -409,6 +410,7 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     filename, _ = os.path.splitext(file_path)
     output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
+    members_df = pd.read_excel("members_list.xlsx")
     # Write to processed Excel file
     with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
         for branch_name, df in dataframes.items():
@@ -418,7 +420,18 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
             print_progress(f"Processed DataFrame: {branch_name}, shape: {summarize_df.shape}")
 
             #  Get the member names from the members list
-            # if 'NEC' not in branch_name:
+            branch_members_df = members_df
+            if 'NEC' not in branch_name:
+                branch_members_df = get_branch_members(branch_name, BRANCH_NAME_FIELD, members_df)
+                print_progress(f"Branch members DataFrame shape: {branch_members_df.shape}")
+
+            if not branch_members_df.empty:
+                summarize_df = match_payee_to_members(summarize_df, branch_members_df)
+            else:
+                print_progress(
+                    f"No members found for branch '{branch_name}'. Skipping member matching."
+                )
+
 
             summarize_df.to_excel(writer, sheet_name=branch_name, index=False)
             print_progress(f">>>>>>>>>>>> Saved processed DataFrame: {branch_name} to {output_excel}")
