@@ -18,6 +18,7 @@ MATCHED_MEMBER_FIELD = "Matched Member"
 MATCHED_MEMBER_ID_FIELD = "Matched Member ID"
 MEMBERS_ID_FIELD = "ID"
 DROP_NAMES_LIST = ["NIGHT SAFE", "STWDSHP"]
+ALLOWED_PURPOSES = ["Tithe", "Offering", "Donation to Charity"]
 
 
 def print_progress(message):
@@ -45,12 +46,9 @@ def process_data() -> pd.DataFrame:
     )
 
     # Clean up the members list by dropping duplicate rows with the same First Name and Last Name, keeping the last occurrence
-    members_df.drop_duplicates(
-        subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD], keep="last", inplace=True
-    )
-    print_progress(
-        f"Process Data: Members list data shape after dropping duplicates: {members_df.shape}"
-    )
+    members_df.drop_duplicates(subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD],
+                               keep="last", inplace=True)
+    print_progress(f"Process Data: Members list data shape after dropping duplicates: {members_df.shape}")
 
     # Match the Description_Name with member names in the members list and create a new column Matched Member with the matched name and the ID from the members list
     members_df[FULL_NAME_FIELD] = (
@@ -162,34 +160,42 @@ def load_and_clean_statement(bank_df: pd.DataFrame) -> pd.DataFrame:
             f"Bank statement data shape after dropping rows with '{name}' in Description: {bank_df.shape}"
         )
 
-    # Drop rows if the Purpose column does not contain the word 'Tithe' or 'Offering'
-    bank_df = bank_df[
-        bank_df[PURPOSE_FIELD].str.contains("Tithe", case=False, na=False)
-        | bank_df[PURPOSE_FIELD].str.contains("Offering", case=False, na=False)
-    ]
-    # print_progress(
-    #     f"Filtered bank statement data shape after dropping non Tithes and Offering: {bank_df.shape}"
-    # )
+    # Only keep rows where the Purpose field contains Tithe, Offering, or Donation to Charity
+    if PURPOSE_FIELD not in bank_df.columns:
+        print_progress(
+            f"Purpose field '{PURPOSE_FIELD}' not found in bank statement data. Skipping filtering by Purpose."
+        )
+    else:
+        # Filter the bank_df to only include rows where Purpose contains Tithe, Offering, or Donation to Charity
+        bank_df = bank_df[
+            bank_df[PURPOSE_FIELD].str.contains(
+                "|".join(ALLOWED_PURPOSES), case=False, na=False
+            )
+        ]
+        print_progress(
+            f"Filtered bank statement data shape after keeping only Tithes, Offerings, and Donations: {bank_df.shape}"
+        )
+
     #  Drop Restricted rows if the Restricted field exists
     if RESTRICTED_FIELD in bank_df.columns.to_list():
         # If the Restricted field exists, filter out rows where it is True
         bank_df = bank_df[
             ~bank_df[RESTRICTED_FIELD].str.contains("Yes", case=False, na=False)
         ]
-    # print_progress(
-    #     f"Filtered bank statement data shape after removing restricted rows: {bank_df.shape}"
-    # )
+        print_progress(
+            f"Filtered bank statement data shape after removing restricted rows: {bank_df.shape}"
+        )
 
     # Drop all rows where Description is just a number
     bank_df = bank_df[
         ~pd.to_numeric(bank_df[DESCRIPTION_FIELD], errors="coerce").notnull()
     ]
-    # print_progress(
-    #     f"Bank statement data shape after dropping rows with numeric Description: {bank_df.shape}"
-    # )
+    print_progress(
+        f"Bank statement data shape after dropping rows with numeric Description: {bank_df.shape}"
+    )
 
     bank_df = extract_payee_name(bank_df)
-    print_progress("Extracted Description_Name from bank statement data.")
+    # print_progress("Extracted Description_Name from bank statement data.")
 
     # Sum amounts by Description_Name
     bank_df = bank_df.groupby(DESC_NAME_FIELD, as_index=False)[AMOUNT_FIELD].sum()
