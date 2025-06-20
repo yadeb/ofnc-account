@@ -1,7 +1,9 @@
 # Add the necessary imports
+import os
 import pandas as pd
 from rapidfuzz import fuzz, process
 from income_data_loader import IncomeDataLoader
+from xlsxwriter import Workbook
 
 #  define a constant string for Restricted field
 RESTRICTED_FIELD = "Restricted"
@@ -167,32 +169,25 @@ def load_and_clean_statement(bank_df : pd.DataFrame) -> pd.DataFrame:
         bank_df[PURPOSE_FIELD].str.contains("Tithe", case=False, na=False)
         | bank_df[PURPOSE_FIELD].str.contains("Offering", case=False, na=False)
     ]
-    print_progress(
-        f"Filtered bank statement data shape after dropping non Tithes and Offering: {bank_df.shape}"
-    )
+    # print_progress(
+    #     f"Filtered bank statement data shape after dropping non Tithes and Offering: {bank_df.shape}"
+    # )
     #  Drop Restricted rows if the Restricted field exists
     if RESTRICTED_FIELD in bank_df.columns.to_list():
         # If the Restricted field exists, filter out rows where it is True
         bank_df = bank_df[
             ~bank_df[RESTRICTED_FIELD].str.contains("Yes", case=False, na=False)
         ]
-    print_progress(
-        f"Filtered bank statement data shape after removing restricted rows: {bank_df.shape}"
-    )
+    # print_progress(
+    #     f"Filtered bank statement data shape after removing restricted rows: {bank_df.shape}"
+    # )
 
     # Drop all rows where Description is just a number
     bank_df = bank_df[
         ~pd.to_numeric(bank_df[DESCRIPTION_FIELD], errors="coerce").notnull()
     ]
-    print_progress(
-        f"Bank statement data shape after dropping rows with numeric Description: {bank_df.shape}"
-    )
-
-    # # From the bank description extract the first two words into a Description_Name column
-    # bank_df[DESC_NAME_FIELD] = (
-    #     bank_df[DESCRIPTION_FIELD]
-    #     .astype(str)
-    #     .apply(lambda x: " ".join(x.split()[:2]) if isinstance(x, str) else x)
+    # print_progress(
+    #     f"Bank statement data shape after dropping rows with numeric Description: {bank_df.shape}"
     # )
 
     bank_df = extract_payee_name(bank_df)
@@ -200,9 +195,9 @@ def load_and_clean_statement(bank_df : pd.DataFrame) -> pd.DataFrame:
 
     # Sum amounts by Description_Name
     bank_df = bank_df.groupby(DESC_NAME_FIELD, as_index=False)[AMOUNT_FIELD].sum()
-    print_progress(
-        "Grouped bank statement data by Description_Name and summed amounts."
-    )
+    # print_progress(
+    #     "Grouped bank statement data by Description_Name and summed amounts."
+    # )
 
     print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
     return bank_df
@@ -404,31 +399,22 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     # print the names of the loaded DataFrames
     for name in dataframes.keys():
         print(f"Loaded DataFrame: {name}")
+    
+    filename, _ = os.path.splitext(file_path)
+    output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-    # Example: access the Bedford sheet data
-    bedford_df = dataframes.get("Bedford_df")
-
-    output_excel = "processed_consolidated_income_data.xlsx"
-
-    for name, df in dataframes.items():
-        print_progress(f"Processing DataFrame: {name}, shape: {df.shape}")
-        #  Normalize the Date column to datetime
-        summarize_df = load_and_clean_statement(df)
-        print_progress(f"Processed DataFrame: {name}, shape: {summarize_df.shape}")
-        # Save each processed DataFrame to a separate sheet in an Excel file
-        with pd.ExcelWriter(output_excel, engine='openpyxl', mode='a') as writer:
+    # Write to processed Excel file    
+    with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
+        for name, df in dataframes.items():
+            print_progress(f"Processing DataFrame: {name}, shape: {df.shape}")
+            # Normalize the Date column to datetime
+            summarize_df = load_and_clean_statement(df)
+            print_progress(f"Processed DataFrame: {name}, shape: {summarize_df.shape}")
             summarize_df.to_excel(writer, sheet_name=name, index=False)
-            print_progress(f"Saved processed DataFrame: {name} to {output_excel}")
+            print_progress(f">>>>>>>>>>>> Saved processed DataFrame: {name} to {output_excel}")
 
     return
 
-    if bedford_df is not None:
-        print("Bedford DataFrame:")
-        print(bedford_df.head())
-        bedford_bank_df = load_and_clean_statement(bedford_df)
-        print_progress(f"Processed Bedford bank statement data shape: {bedford_bank_df.shape}")
-    else:
-        print("No income data found for 'Bedford'.")
 
 if __name__ == "__main__":
     load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
