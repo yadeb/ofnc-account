@@ -56,6 +56,7 @@ class IncomeDataLoader:
 
             df = pd.DataFrame(data_rows, columns=header)
             df.dropna(axis=1, how='all', inplace=True)
+            df.dropna(axis=0, how='all', inplace=True)  # Drop rows that are completely empty
             var_name = f"{sheet}_df"
             self.dataframes[var_name] = df
             logging.info(f"Loaded data from sheet: {sheet} into '{var_name}'")

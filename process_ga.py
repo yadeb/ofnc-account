@@ -161,7 +161,7 @@ def load_and_clean_statement(bank_df : pd.DataFrame) -> pd.DataFrame:
             f"Bank statement data shape after dropping rows with '{name}' in Description: {bank_df.shape}"
         )
 
-    # Drop rows if the Purpose colomn does not contain the word 'Tithe' or 'Offering'
+    # Drop rows if the Purpose column does not contain the word 'Tithe' or 'Offering'
     bank_df = bank_df[
         bank_df[PURPOSE_FIELD].str.contains("Tithe", case=False, na=False)
         | bank_df[PURPOSE_FIELD].str.contains("Offering", case=False, na=False)
@@ -407,16 +407,19 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     # Example: access the Bedford sheet data
     bedford_df = dataframes.get("Bedford_df")
 
+
     if bedford_df is not None:
         print("Bedford DataFrame:")
         print(bedford_df.head())
+        bedford_bank_df = load_and_clean_statement(bedford_df)
+        print_progress(f"Processed Bedford bank statement data shape: {bedford_bank_df.shape}")
     else:
         print("No income data found for 'Bedford'.")
 
 if __name__ == "__main__":
-    # load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
-    # print_progress("Consolidated income data loaded and processed.")
-    exit(0)
+    load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
+    print_progress("Consolidated income data loaded and processed.")
+    # exit(0)
     bank_df = process_data()
     print_progress(f"Processed bank statement data shape: {bank_df.shape}")
     #  Write the processed bank_df to an Excel file
