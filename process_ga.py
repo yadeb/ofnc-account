@@ -28,12 +28,11 @@ def print_progress(message):
 def process_data() -> pd.DataFrame:
     # Load the bank statement and members list
     print_progress("Loading bank statement and members list...")
-    print_progress("Loading bank statement...")
     bank_df = pd.read_excel("bank_statement.xlsx")
     print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
     bank_df = load_and_clean_statement(bank_df)
     print_progress(f"Process Data: Loaded bank statement data shape: {bank_df.shape}")
- 
+
     # Load the members list from an Excel file
     members_df = pd.read_excel("members_list.xlsx")
     print_progress(f"Process Data: Loaded members list data shape: {members_df.shape}")
@@ -137,9 +136,8 @@ def manual_match_member(
     )
 
 
-def load_and_clean_statement(bank_df : pd.DataFrame) -> pd.DataFrame:
+def load_and_clean_statement(bank_df: pd.DataFrame) -> pd.DataFrame:
     """Load and process the bank statement from the given file."""
-
 
     # mark the description field as a string to avoid issues with mixed types
     bank_df[DESCRIPTION_FIELD] = bank_df[DESCRIPTION_FIELD].astype(str)
@@ -328,11 +326,10 @@ def match_payee_to_members(
     return bank_df
 
 
-
 def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
     def parse_description(desc: str) -> str:
         parts = desc.split()
-        
+
         # Handle FPI: likely long transaction with structure at the end
         if len(parts) >= 7:
             # Assume last 5 words are transaction details, reference is before that (max 18 chars)
@@ -341,35 +338,38 @@ def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
             # Try to find the reference (max 18 chars, can be multiple words)
             # We'll assume the reference is the last word before the 5 details if it's <= 18 chars
             # Name is everything before the reference
-            for i in range(len(main)-1, 1, -1):
-                ref_candidate = ' '.join(main[i:])
+            for i in range(len(main) - 1, 1, -1):
+                ref_candidate = " ".join(main[i:])
                 if len(ref_candidate) == 18:
-                    return ' '.join(main[:i])
+                    return " ".join(main[:i])
                 if len(ref_candidate) > 18:
-                    return ' '.join(main[:i +1])
-            
-            name = ' '.join(main[:2])  # Fallback to first two words if no reference found
-            if len(main) > 3 and main[1] in ['&', '+']:
+                    return " ".join(main[: i + 1])
+
+            name = " ".join(
+                main[:2]
+            )  # Fallback to first two words if no reference found
+            if len(main) > 3 and main[1] in ["&", "+"]:
                 # If the third word is '&' or 'and', we can include it in the name
                 #  Add the third word and fourth word to the name
-                name = name + ' ' + main[2] + ' ' + main[3]
+                name = name + " " + main[2] + " " + main[3]
                 return name
-            if len(main) > 3 and main[2] in ['&', '+']: 
+            if len(main) > 3 and main[2] in ["&", "+"]:
                 # If the fourth word is '&' or 'and', it is a joint account with the last name first, get the second initial
-                name = name + ' ' + main[3]
+                name = name + " " + main[3]
 
-            return name # Fallback to first two words if we get here
+            return name  # Fallback to first two words if we get here
         elif len(parts) >= 2:
             # Handle SO: name followed by a reference
             return " ".join(parts[:2])  # At least the first two words as name
         elif len(parts) == 1:
             # Possibly a cheque deposit or one-word name
             return parts[0]
-        
+
         return desc  # Fallback to full description if pattern not matched
 
     df[DESC_NAME_FIELD] = df[DESCRIPTION_FIELD].apply(parse_description)
     return df
+
 
 def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame:
     """
@@ -383,7 +383,7 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
         pd.DataFrame: Processed DataFrame containing consolidated income data.
     """
     # main.py
-    
+
     # Define the headers to look for in the title row
     income_headers = ['Date',	'Branch',	'Transaction Description',	'Purpose',	'Description',	'Business a/c']
 
@@ -399,12 +399,12 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     # print the names of the loaded DataFrames
     for name in dataframes.keys():
         print(f"Loaded DataFrame: {name}")
-    
+
     filename, _ = os.path.splitext(file_path)
     output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-    # Write to processed Excel file    
-    with pd.ExcelWriter(output_excel, engine='xlsxwriter') as writer:
+    # Write to processed Excel file
+    with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
         for name, df in dataframes.items():
             print_progress(f"Processing DataFrame: {name}, shape: {df.shape}")
             # Normalize the Date column to datetime
