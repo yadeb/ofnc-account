@@ -403,24 +403,42 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     dataframes = loader.get_dataframes()
     print_progress(f"Loaded {len(dataframes)} income data sheets from {file_path}.")
     # print the names of the loaded DataFrames
-    for name in dataframes.keys():
-        print(f"Loaded DataFrame: {name}")
+    for branch_name in dataframes.keys():
+        print(f"Loaded DataFrame: {branch_name}")
 
     filename, _ = os.path.splitext(file_path)
     output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     # Write to processed Excel file
     with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
-        for name, df in dataframes.items():
-            print_progress(f"Processing DataFrame: {name}, shape: {df.shape}")
+        for branch_name, df in dataframes.items():
+            print_progress(f"Processing DataFrame: {branch_name}, shape: {df.shape}")
             # Normalize the Date column to datetime
             summarize_df = load_and_clean_statement(df)
-            print_progress(f"Processed DataFrame: {name}, shape: {summarize_df.shape}")
-            summarize_df.to_excel(writer, sheet_name=name, index=False)
-            print_progress(f">>>>>>>>>>>> Saved processed DataFrame: {name} to {output_excel}")
+            print_progress(f"Processed DataFrame: {branch_name}, shape: {summarize_df.shape}")
+
+            #  Get the member names from the members list
+            # if 'NEC' not in branch_name:
+
+            summarize_df.to_excel(writer, sheet_name=branch_name, index=False)
+            print_progress(f">>>>>>>>>>>> Saved processed DataFrame: {branch_name} to {output_excel}")
 
     return
 
+def get_branch_members(
+    branch_name: str, branch_field : str,  members_df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Get members from a specific branch.
+
+    Args:
+        branch_name (str): Name of the branch to filter members.
+        members_df (pd.DataFrame): DataFrame containing member information.
+
+    Returns:
+        pd.DataFrame: Filtered DataFrame containing members from the specified branch.
+    """
+    return members_df[members_df[branch_field] == branch_name]
 
 if __name__ == "__main__":
     load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
