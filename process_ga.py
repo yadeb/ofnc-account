@@ -151,7 +151,8 @@ def load_and_clean_statement(bank_df : pd.DataFrame) -> pd.DataFrame:
     print_progress(
         f"Bank statement data shape after dropping NaN in Description or Amount: {bank_df.shape}"
     )
-
+    #  print the columns of the bank_df
+    print_progress(f"Bank statement columns: {bank_df.columns.tolist()}")
     #  Drop rows where the Description contains any of the names in the DROP_NAMES_LIST
     for name in DROP_NAMES_LIST:
         bank_df = bank_df[
@@ -407,6 +408,19 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     # Example: access the Bedford sheet data
     bedford_df = dataframes.get("Bedford_df")
 
+    output_excel = "processed_consolidated_income_data.xlsx"
+
+    for name, df in dataframes.items():
+        print_progress(f"Processing DataFrame: {name}, shape: {df.shape}")
+        #  Normalize the Date column to datetime
+        summarize_df = load_and_clean_statement(df)
+        print_progress(f"Processed DataFrame: {name}, shape: {summarize_df.shape}")
+        # Save each processed DataFrame to a separate sheet in an Excel file
+        with pd.ExcelWriter(output_excel, engine='openpyxl', mode='a') as writer:
+            summarize_df.to_excel(writer, sheet_name=name, index=False)
+            print_progress(f"Saved processed DataFrame: {name} to {output_excel}")
+
+    return
 
     if bedford_df is not None:
         print("Bedford DataFrame:")
@@ -419,7 +433,7 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
 if __name__ == "__main__":
     load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
     print_progress("Consolidated income data loaded and processed.")
-    # exit(0)
+    exit(0)
     bank_df = process_data()
     print_progress(f"Processed bank statement data shape: {bank_df.shape}")
     #  Write the processed bank_df to an Excel file
