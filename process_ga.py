@@ -1,6 +1,7 @@
 # Add the necessary imports
 import pandas as pd
 from rapidfuzz import fuzz, process
+from income_data_loader import IncomeDataLoader
 
 #  define a constant string for Restricted field
 RESTRICTED_FIELD = "Restricted"
@@ -330,8 +331,6 @@ def match_payee_to_members(
     return bank_df
 
 
-import pandas as pd
-import re
 
 def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
     def parse_description(desc: str) -> str:
@@ -375,7 +374,48 @@ def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
     df[DESC_NAME_FIELD] = df[DESCRIPTION_FIELD].apply(parse_description)
     return df
 
+def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame:
+    """
+    Load and process consolidated income data from an Excel file.
+
+    Args:
+        file_path (str): Path to the Excel file.
+        income_headers (list): List of headers that identify the title row of the income data.
+
+    Returns:
+        pd.DataFrame: Processed DataFrame containing consolidated income data.
+    """
+    # main.py
+    
+    # Define the headers to look for in the title row
+    income_headers = ['Date',	'Branch',	'Transaction Description',	'Purpose',	'Description',	'Business a/c']
+
+    # Create an instance of the loader
+    loader = IncomeDataLoader(file_path, income_headers)
+
+    # Load the data
+    loader.load_income_data()
+
+    # Get the DataFrames
+    dataframes = loader.get_dataframes()
+    print_progress(f"Loaded {len(dataframes)} income data sheets from {file_path}.")
+    # print the names of the loaded DataFrames
+    for name in dataframes.keys():
+        print(f"Loaded DataFrame: {name}")
+
+    # Example: access the Bedford sheet data
+    bedford_df = dataframes.get("Bedford_df")
+
+    if bedford_df is not None:
+        print("Bedford DataFrame:")
+        print(bedford_df.head())
+    else:
+        print("No income data found for 'Bedford'.")
+
 if __name__ == "__main__":
+    load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
+    print_progress("Consolidated income data loaded and processed.")
+    exit(0)
     bank_df = process_data()
     print_progress(f"Processed bank statement data shape: {bank_df.shape}")
     #  Write the processed bank_df to an Excel file
