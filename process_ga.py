@@ -26,7 +26,10 @@ def print_progress(message):
 def process_data() -> pd.DataFrame:
     # Load the bank statement and members list
     print_progress("Loading bank statement and members list...")
-    bank_df = load_and_clean_statement("bank_statement.xlsx")
+    print_progress("Loading bank statement...")
+    bank_df = pd.read_excel("bank_statement.xlsx")
+    print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
+    bank_df = load_and_clean_statement(bank_df)
     print_progress(f"Process Data: Loaded bank statement data shape: {bank_df.shape}")
  
     # Load the members list from an Excel file
@@ -132,11 +135,9 @@ def manual_match_member(
     )
 
 
-def load_and_clean_statement(eoy_file: str) -> pd.DataFrame:
+def load_and_clean_statement(bank_df : pd.DataFrame) -> pd.DataFrame:
     """Load and process the bank statement from the given file."""
-    print_progress("Loading bank statement...")
-    bank_df = pd.read_excel(eoy_file)
-    print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
+
 
     # mark the description field as a string to avoid issues with mixed types
     bank_df[DESCRIPTION_FIELD] = bank_df[DESCRIPTION_FIELD].astype(str)
@@ -413,8 +414,8 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
         print("No income data found for 'Bedford'.")
 
 if __name__ == "__main__":
-    load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
-    print_progress("Consolidated income data loaded and processed.")
+    # load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
+    # print_progress("Consolidated income data loaded and processed.")
     exit(0)
     bank_df = process_data()
     print_progress(f"Processed bank statement data shape: {bank_df.shape}")
