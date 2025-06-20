@@ -43,7 +43,19 @@ class IncomeDataLoader:
                 logging.warning(f"No valid header found in sheet: {sheet}")
                 continue
 
+            print(f"Header found in sheet1 '{sheet}': {header}")
             header = header[first_col_index:]
+
+            cols_to_keep_index = next((i for i, val in enumerate(header) if str(val).strip().lower() == self.income_headers[-1]), None)
+            if cols_to_keep_index is None:
+                logging.error(f"Header list mismatch")
+                continue
+            cols_to_keep_index += 1  # Include the last header item in the slice
+
+            header = header[:cols_to_keep_index]
+            
+            # Drop all the columns after header
+            df_raw = df_raw.iloc[:, :cols_to_keep_index]
             data_start = title_row_index + 1
 
             # Collect rows until the first blank row (all NaNs)
