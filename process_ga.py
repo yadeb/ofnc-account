@@ -234,7 +234,7 @@ from rapidfuzz import process, fuzz
 
 
 def match_payee_to_members(
-    bank_df: pd.DataFrame, members_df: pd.DataFrame
+    bank_df: pd.DataFrame, members_df_in: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Matches the payee_name in the bank transactions DataFrame to the members list DataFrame.
@@ -246,6 +246,7 @@ def match_payee_to_members(
     Returns:
         pd.DataFrame: Updated bank_df with matched full name and ID columns.
     """
+    members_df = members_df_in.copy()
     # Create a full name column in the members list
     members_df.loc[:, FULL_NAME_FIELD] = (
         members_df[FIRST_NAME_FIELD].str.strip()
