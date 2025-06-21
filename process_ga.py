@@ -10,6 +10,7 @@ RESTRICTED_FIELD = "Restricted"
 DESCRIPTION_FIELD = "Transaction Description"
 PURPOSE_FIELD = "Purpose"
 AMOUNT_FIELD = "Amount"
+DATE_FIELD = "Date"
 DESC_NAME_FIELD = "Description_Name"
 FIRST_NAME_FIELD = "First Name"
 LAST_NAME_FIELD = "Last Name"
@@ -20,6 +21,7 @@ MEMBERS_ID_FIELD = "ID"
 DROP_NAMES_LIST = ["NIGHT SAFE", "STWDSHP"]
 ALLOWED_PURPOSES = ["Tithe", "Offering", "Donation to Charity"]
 BRANCH_NAME_FIELD = "OFNC Branch"
+PREVIOUSLY_MATCHED_FIELD = "Previously Matched"
 
 
 def print_progress(message):
@@ -198,8 +200,19 @@ def load_and_clean_statement(bank_df: pd.DataFrame) -> pd.DataFrame:
     bank_df = extract_payee_name(bank_df)
     # print_progress("Extracted Description_Name from bank statement data.")
 
+    #  Sum amounts by Description_Name and get the last payment date
+    # Ensure 'date' is datetime
+    # bank_df[DATE_FIELD] = pd.to_datetime(bank_df[DATE_FIELD], errors='coerce')
+    # I want the date to be in the format DD/MM/YYYY wihout time
+    bank_df[DATE_FIELD] = pd.to_datetime(bank_df[DATE_FIELD], errors='coerce').dt.strftime('%d/%m/%Y')
+
+    bank_df = bank_df.groupby(DESC_NAME_FIELD).agg(
+        total_amount=(AMOUNT_FIELD, 'sum'),
+        last_payment_date=(DATE_FIELD, 'max')
+    ).reset_index()
+
     # Sum amounts by Description_Name
-    bank_df = bank_df.groupby(DESC_NAME_FIELD, as_index=False)[AMOUNT_FIELD].sum()
+    # bank_df = bank_df.groupby(DESC_NAME_FIELD, as_index=False)[AMOUNT_FIELD].sum()
     # print_progress(
     #     "Grouped bank statement data by Description_Name and summed amounts."
     # )
@@ -226,12 +239,12 @@ def match_payee_to_members(
         pd.DataFrame: Updated bank_df with matched full name and ID columns.
     """
     # Create a full name column in the members list
-    members_df[FULL_NAME_FIELD] = (
+    members_df.loc[:, FULL_NAME_FIELD] = (
         members_df[FIRST_NAME_FIELD].str.strip()
         + " "
         + members_df[LAST_NAME_FIELD].str.strip()
     )
-    members_df[FULL_NAME_FIELD] = members_df[FULL_NAME_FIELD].str.lower()
+    members_df.loc[:, FULL_NAME_FIELD] = members_df[FULL_NAME_FIELD].str.lower()
 
     # Convert the full name column to a list for matching
     member_names = members_df[FULL_NAME_FIELD].tolist()
@@ -288,7 +301,7 @@ def match_payee_to_members(
                         return full_name, matched_rows[MEMBERS_ID_FIELD].values[0]
                     return (
                         full_name + " (Check)",
-                        matched_rows[MEMBERS_ID_FIELD].values[0],
+                        matched_rows[MEMBERS_ID_FIELD].values[0]
                     )
                 elif len(matched_rows) > 1:
                     print(
@@ -410,10 +423,11 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     filename, _ = os.path.splitext(file_path)
     output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-    members_df = pd.read_excel("members_list.xlsx")
+    members_df = pd.read_excel("ga_consent_list.xlsx")
     # Write to processed Excel file
     with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
         for branch_name, df in dataframes.items():
+
             print_progress(f"Processing DataFrame: {branch_name}, shape: {df.shape}")
             # Normalize the Date column to datetime
             summarize_df = load_and_clean_statement(df)
@@ -425,7 +439,7 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
                 branch_members_df = get_branch_members(branch_name, BRANCH_NAME_FIELD, members_df)
                 print_progress(f"Branch members DataFrame shape: {branch_members_df.shape}")
 
-            if not branch_members_df.empty:
+            if not branch_members_df.empty and branch_name != "Exeter":
                 summarize_df = match_payee_to_members(summarize_df, branch_members_df)
             else:
                 print_progress(
@@ -435,6 +449,7 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
 
             summarize_df.to_excel(writer, sheet_name=branch_name, index=False)
             print_progress(f">>>>>>>>>>>> Saved processed DataFrame: {branch_name} to {output_excel}")
+            # break
 
     return
 
@@ -454,7 +469,7 @@ def get_branch_members(
     return members_df[members_df[branch_field] == branch_name]
 
 if __name__ == "__main__":
-    load_consolidated_data("consolidated_income_data_2024.xlsx", income_headers=None)
+    load_consolidated_data("ConsolidatedAccounts2024Final1_GA.xlsx", income_headers=None)
     print_progress("Consolidated income data loaded and processed.")
     exit(0)
     bank_df = process_data()
