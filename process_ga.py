@@ -463,6 +463,12 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     # Write to processed Excel file
     with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
         for branch_name, df in dataframes.items():
+            branch_name_ga = branch_name.replace("_", " ")
+            # Fix some errors in the consolidated accounts list
+            if branch_name == "London":
+                branch_name_ga = "London Central"
+            if branch_name == "Teeside":
+                branch_name_ga = "Teesside"
 
             print_progress(f"Processing DataFrame: {branch_name}, shape: {df.shape}")
             # Normalize the Date column to datetime
