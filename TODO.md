@@ -1,3 +1,4 @@
+- Choose the last name entered in the GA : *Done*
 - Add unit tests
-- Remove people who said NO to GA
+- Remove people who said NO to GA: *Done*
 - Add option to search payee name from previous GA list
