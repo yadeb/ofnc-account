@@ -504,6 +504,26 @@ def get_branch_members(
     """
     return members_df[members_df[branch_field] == branch_name]
 
+def cleanup_ga_consent_list(ga_consent_list : pd.DataFrame) -> pd.DataFrame:
+    # Drop duplicates and keep the newest name
+    # Sort to get the newest
+    sorted_df = ga_consent_list.sort_values('Completion time', ascending=False).drop_duplicates(subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD], keep='first')
+    #  members_df.drop_duplicates(subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD],
+    #                            keep="last", inplace=True)
+    filtered_df = ga_consent_list[ga_consent_list.index.isin(sorted_df.index)]
+
+    # Drop the names with No in the I would like The Overseas Fellowship of Nigerian Christians to reclaim gift aid on all eligible donations I have made during the previous four years and all future donations I make from the date o...
+    consent_cols = [col for col in filtered_df.columns if 'gift aid' in col.lower()]
+
+    if len(consent_cols) > 1:
+        print_progress("**** ga_consent_list seems invalid. Output may be incorrect ")
+        consent_cols = consent_cols[:1]
+
+    # Filter out rows where the GA consent column has 'No'
+    filtered_df = filtered_df[~filtered_df[consent_cols].eq('No').any(axis=1)]
+    filtered_df[MEMBERS_ID_FIELD] = filtered_df[MEMBERS_ID_FIELD].fillna('').astype(str).str.strip()
+    return filtered_df
+
 if __name__ == "__main__":
     load_consolidated_data("ConsolidatedAccounts2024Final1_GA.xlsx", income_headers=None)
     print_progress("Consolidated income data loaded and processed.")
