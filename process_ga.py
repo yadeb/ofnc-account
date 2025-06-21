@@ -345,18 +345,32 @@ def match_payee_to_members(
         return None, None
 
     # Apply the matching function to the payee_name column
-    bank_df[MATCHED_MEMBER_FIELD], bank_df[MEMBERS_ID_FIELD] = zip(
-        *bank_df[DESC_NAME_FIELD].apply(match_member)
-    )
-    #  Get the details of the matched members
-    merged_df = bank_df.merge(members_df[[MEMBERS_ID_FIELD, TITLE_FIELD, FIRST_NAME_FIELD, LAST_NAME_FIELD, FULL_HOUSE_ADDRESS_FIELD, POSTCODE_FIELD]], on=MEMBERS_ID_FIELD, how='left')
+    merged_df = bank_df.copy()
+    if not members_df.empty:
+        bank_df[MATCHED_MEMBER_FIELD], bank_df[MEMBERS_ID_FIELD] = zip(
+            *bank_df[DESC_NAME_FIELD].apply(match_member)
+        )
 
-    #  Reorder the columns according to the order of the fields in the GA spreadsheet
-    merged_df = merged_df[["Transaction_Description",DESC_NAME_FIELD,MATCHED_MEMBER_FIELD, TITLE_FIELD, FIRST_NAME_FIELD, LAST_NAME_FIELD, FULL_HOUSE_ADDRESS_FIELD, POSTCODE_FIELD, AMOUNT_FIELD, DATE_FIELD ]]
+        #  Get the details of the matched members
+        merged_df = bank_df.merge(members_df[[MEMBERS_ID_FIELD, TITLE_FIELD, FIRST_NAME_FIELD, LAST_NAME_FIELD, FULL_HOUSE_ADDRESS_FIELD, POSTCODE_FIELD]], on=MEMBERS_ID_FIELD, how='left')
 
-    #  Extract the House Number from the Full House Address and drop the Full House Address column
-    merged_df[HOUSE_NUMBER_FIELD] = merged_df[FULL_HOUSE_ADDRESS_FIELD].fillna('').str.strip().str.split().str[0]
-    merged_df.drop(columns=[FULL_HOUSE_ADDRESS_FIELD], inplace=True)
+        #  Reorder the columns according to the order of the fields in the GA spreadsheet
+        merged_df = merged_df[["Transaction_Description",DESC_NAME_FIELD,MATCHED_MEMBER_FIELD, TITLE_FIELD, FIRST_NAME_FIELD, LAST_NAME_FIELD, FULL_HOUSE_ADDRESS_FIELD, POSTCODE_FIELD, AMOUNT_FIELD, DATE_FIELD ]]
+
+        #  Extract the House Number from the Full House Address and drop the Full House Address column
+        merged_df[HOUSE_NUMBER_FIELD] = merged_df[FULL_HOUSE_ADDRESS_FIELD].fillna('').str.strip().str.split().str[0]
+        merged_df.drop(columns=[FULL_HOUSE_ADDRESS_FIELD], inplace=True)
+    else:
+        merged_df = bank_df.copy()
+        ga_fields = [MATCHED_MEMBER_FIELD, TITLE_FIELD, FIRST_NAME_FIELD, LAST_NAME_FIELD, HOUSE_NUMBER_FIELD, POSTCODE_FIELD]
+        #  Add the GA fields to the merged_df
+        for field in ga_fields:
+            merged_df[field] = ''
+        # Move Transaction_Description to the first column
+        cols = list(merged_df.columns)
+        cols.insert(0, cols.pop(cols.index("Transaction_Description")))
+        merged_df = merged_df[cols]
+        
 
     # Move the House Number column to after the Last Name column
     cols = list(merged_df.columns)
@@ -460,6 +474,7 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     members_df = pd.read_excel("ga_consent_list.xlsx")
+    members_df = cleanup_ga_consent_list(members_df)
     # Write to processed Excel file
     with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
         for branch_name, df in dataframes.items():
@@ -478,10 +493,10 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
             #  Get the member names from the members list
             branch_members_df = members_df
             if 'NEC' not in branch_name:
-                branch_members_df = get_branch_members(branch_name, BRANCH_NAME_FIELD, members_df)
+                branch_members_df = get_branch_members(branch_name_ga, BRANCH_NAME_FIELD, members_df)
                 print_progress(f"Branch members DataFrame shape: {branch_members_df.shape}")
 
-            if not branch_members_df.empty and branch_name != "Exeter":
+            if  branch_name != "Exeter":
                 summarize_df = match_payee_to_members(summarize_df, branch_members_df)
             else:
                 print_progress(
