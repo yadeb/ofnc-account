@@ -11,17 +11,24 @@ DESCRIPTION_FIELD = "Transaction Description"
 PURPOSE_FIELD = "Purpose"
 AMOUNT_FIELD = "Amount"
 DATE_FIELD = "Date"
-DESC_NAME_FIELD = "Description_Name"
+DESC_NAME_FIELD = "TransactionDesc_Name"
 FIRST_NAME_FIELD = "First Name"
 LAST_NAME_FIELD = "Last Name"
 FULL_NAME_FIELD = "Full Name"
 MATCHED_MEMBER_FIELD = "Matched Member"
-MATCHED_MEMBER_ID_FIELD = "Matched Member ID"
 MEMBERS_ID_FIELD = "ID"
 DROP_NAMES_LIST = ["NIGHT SAFE", "STWDSHP"]
 ALLOWED_PURPOSES = ["Tithe", "Offering", "Donation to Charity"]
 BRANCH_NAME_FIELD = "OFNC Branch"
 PREVIOUSLY_MATCHED_FIELD = "Previously Matched"
+SURNAME_FIELD = "Surname"
+HOUSE_NUMBER_FIELD = "House Number"
+FULL_HOUSE_ADDRESS_FIELD = "Full House Address"
+POSTCODE_FIELD = "Postcode"
+SPONSORED_EVENT_FIELD = "Sponsored Event"
+TITLE_FIELD = "Title"
+AGGREGATED_DONATION_FIELD = "Aggregated Donation (Leave Blank)"
+SPONSORED_EVENT_FIELD = "Sponsored Event (Yes/Blank)"
 
 
 def print_progress(message):
@@ -207,8 +214,9 @@ def load_and_clean_statement(bank_df: pd.DataFrame) -> pd.DataFrame:
     bank_df[DATE_FIELD] = pd.to_datetime(bank_df[DATE_FIELD], errors='coerce').dt.strftime('%d/%m/%Y')
 
     bank_df = bank_df.groupby(DESC_NAME_FIELD).agg(
-        total_amount=(AMOUNT_FIELD, 'sum'),
-        last_payment_date=(DATE_FIELD, 'max')
+        Amount=(AMOUNT_FIELD, 'sum'),
+        Date=(DATE_FIELD, 'max'),
+        Transaction_Description=(DESCRIPTION_FIELD, 'last'),
     ).reset_index()
 
     # Sum amounts by Description_Name
@@ -336,14 +344,41 @@ def match_payee_to_members(
         return None, None
 
     # Apply the matching function to the payee_name column
-    bank_df[MATCHED_MEMBER_FIELD], bank_df[MATCHED_MEMBER_ID_FIELD] = zip(
+    bank_df[MATCHED_MEMBER_FIELD], bank_df[MEMBERS_ID_FIELD] = zip(
         *bank_df[DESC_NAME_FIELD].apply(match_member)
     )
-    #  Prunt how many matches were made
-    matched_count = bank_df[MATCHED_MEMBER_FIELD].notnull().sum()
+    #  Get the details of the matched members
+    merged_df = bank_df.merge(members_df[[MEMBERS_ID_FIELD, TITLE_FIELD, FIRST_NAME_FIELD, LAST_NAME_FIELD, FULL_HOUSE_ADDRESS_FIELD, POSTCODE_FIELD]], on=MEMBERS_ID_FIELD, how='left')
+
+    #  Reorder the columns according to the order of the fields in the GA spreadsheet
+    merged_df = merged_df[["Transaction_Description",DESC_NAME_FIELD,MATCHED_MEMBER_FIELD, TITLE_FIELD, FIRST_NAME_FIELD, LAST_NAME_FIELD, FULL_HOUSE_ADDRESS_FIELD, POSTCODE_FIELD, AMOUNT_FIELD, DATE_FIELD ]]
+
+    #  Extract the House Number from the Full House Address and drop the Full House Address column
+    merged_df[HOUSE_NUMBER_FIELD] = merged_df[FULL_HOUSE_ADDRESS_FIELD].fillna('').str.strip().str.split().str[0]
+    merged_df.drop(columns=[FULL_HOUSE_ADDRESS_FIELD], inplace=True)
+
+    # Move the House Number column to after the Last Name column
+    cols = list(merged_df.columns)
+    last_name_index = cols.index(LAST_NAME_FIELD)
+    cols.insert(last_name_index + 1, cols.pop(cols.index(HOUSE_NUMBER_FIELD)))
+    merged_df = merged_df[cols]
+
+    #  Insert columns Aggregated Donation and Sponsored Event after the Postcode column
+    merged_df.insert(
+        merged_df.columns.get_loc(POSTCODE_FIELD) + 1,
+        AGGREGATED_DONATION_FIELD,
+        ''
+    )
+    merged_df.insert(
+        merged_df.columns.get_loc(AGGREGATED_DONATION_FIELD) + 1,
+        SPONSORED_EVENT_FIELD,
+        ''
+    )
+    #  Print how many matches were made
+    matched_count = merged_df[MATCHED_MEMBER_FIELD].notnull().sum()
     print_progress(f"Matched {matched_count} members in the bank statement data.")
 
-    return bank_df
+    return merged_df
 
 
 def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
