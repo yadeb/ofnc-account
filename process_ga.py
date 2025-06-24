@@ -36,41 +36,6 @@ def print_progress(message):
     print(f"[INFO] {message}")
 
 
-def process_data() -> pd.DataFrame:
-    # Load the bank statement and members list
-    print_progress("Loading bank statement and members list...")
-    bank_df = pd.read_excel("bank_statement.xlsx")
-    print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
-    bank_df = load_and_clean_statement(bank_df)
-    print_progress(f"Process Data: Loaded bank statement data shape: {bank_df.shape}")
-
-    # Load the members list from an Excel file
-    members_df = pd.read_excel("members_list.xlsx")
-    print_progress(f"Process Data: Loaded members list data shape: {members_df.shape}")
-
-    #  Normalize the First Name and Last Name columns in the members list
-    members_df[FIRST_NAME_FIELD] = members_df[FIRST_NAME_FIELD].str.strip().str.title()
-    members_df[LAST_NAME_FIELD] = members_df[LAST_NAME_FIELD].str.strip().str.title()
-    print_progress(
-        "Process Data: Normalized First Name and Last Name columns in the members list."
-    )
-
-    # Clean up the members list by dropping duplicate rows with the same First Name and Last Name, keeping the last occurrence
-    members_df.drop_duplicates(subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD],
-                               keep="last", inplace=True)
-    print_progress(f"Process Data: Members list data shape after dropping duplicates: {members_df.shape}")
-
-    # Match the Description_Name with member names in the members list and create a new column Matched Member with the matched name and the ID from the members list
-    members_df[FULL_NAME_FIELD] = (
-        members_df[FIRST_NAME_FIELD].str.strip()
-        + " "
-        + members_df[LAST_NAME_FIELD].str.strip()
-    )
-
-    tmp_bank_df = match_payee_to_members(bank_df, members_df)
-    bank_df[MATCHED_MEMBER_FIELD] = tmp_bank_df[MATCHED_MEMBER_FIELD]
-    return bank_df
-
 
 def manual_match_member(
     description: str, first_names: list, last_names: list, members_df: pd.DataFrame
@@ -227,10 +192,6 @@ def load_and_clean_statement(bank_df: pd.DataFrame) -> pd.DataFrame:
 
     print_progress(f"Loaded bank statement data shape: {bank_df.shape}")
     return bank_df
-
-
-import pandas as pd
-from rapidfuzz import process, fuzz
 
 
 def match_payee_to_members(
@@ -441,7 +402,8 @@ def extract_payee_name(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame:
+def load_consolidated_data(income_headers: list, account_file_path: str = "ConsolidatedAccounts2024Final1_GA.xlsx",
+                           ga_consent_file : str ="ga_consent_list.xlsx") -> pd.DataFrame:
     """
     Load and process consolidated income data from an Excel file.
 
@@ -458,22 +420,22 @@ def load_consolidated_data(file_path: str, income_headers: list) -> pd.DataFrame
     income_headers = ['Date',	'Branch',	'Transaction Description',	'Purpose',	'Description',	'Business a/c']
 
     # Create an instance of the loader
-    loader = IncomeDataLoader(file_path, income_headers)
+    loader = IncomeDataLoader(account_file_path, income_headers)
 
     # Load the data
     loader.load_income_data()
 
     # Get the DataFrames
     dataframes = loader.get_dataframes()
-    print_progress(f"Loaded {len(dataframes)} income data sheets from {file_path}.")
+    print_progress(f"Loaded {len(dataframes)} income data sheets from {account_file_path}.")
     # print the names of the loaded DataFrames
     for branch_name in dataframes.keys():
         print(f"Loaded DataFrame: {branch_name}")
 
-    filename, _ = os.path.splitext(file_path)
+    filename, _ = os.path.splitext(account_file_path)
     output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-    members_df = pd.read_excel("ga_consent_list.xlsx")
+    members_df = pd.read_excel(ga_consent_file)
     members_df = cleanup_ga_consent_list(members_df)
     # Write to processed Excel file
     with pd.ExcelWriter(output_excel, engine="xlsxwriter") as writer:
@@ -529,8 +491,7 @@ def cleanup_ga_consent_list(ga_consent_list : pd.DataFrame) -> pd.DataFrame:
     # Drop duplicates and keep the newest name
     # Sort to get the newest
     sorted_df = ga_consent_list.sort_values('Completion time', ascending=False).drop_duplicates(subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD], keep='first')
-    #  members_df.drop_duplicates(subset=[FIRST_NAME_FIELD, LAST_NAME_FIELD],
-    #                            keep="last", inplace=True)
+
     filtered_df = ga_consent_list[ga_consent_list.index.isin(sorted_df.index)]
 
     # Drop the names with No in the I would like The Overseas Fellowship of Nigerian Christians to reclaim gift aid on all eligible donations I have made during the previous four years and all future donations I make from the date o...
@@ -546,16 +507,7 @@ def cleanup_ga_consent_list(ga_consent_list : pd.DataFrame) -> pd.DataFrame:
     return filtered_df
 
 if __name__ == "__main__":
-    load_consolidated_data("ConsolidatedAccounts2024Final1_GA.xlsx", income_headers=None)
-    print_progress("Consolidated income data loaded and processed.")
-    exit(0)
-    bank_df = process_data()
-    print_progress(f"Processed bank statement data shape: {bank_df.shape}")
-    #  Write the processed bank_df to an Excel file
-    bank_df.to_excel("processed_bank_statement.xlsx", index=False)
-    print(
-        "Data processing complete. Processed data saved to 'processed_bank_statement.xlsx'."
-    )
+    load_consolidated_data(account_file_path="ConsolidatedAccounts2024Final1_GA.xlsx", income_headers=None)
 else:
     print("This script is intended to be run as a standalone program.")
     # If imported, the process_data function can be called directly.

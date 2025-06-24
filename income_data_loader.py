@@ -43,7 +43,7 @@ class IncomeDataLoader:
                 logging.warning(f"No valid header found in sheet: {sheet}")
                 continue
 
-            print(f"Header found in sheet1 '{sheet}': {header}")
+            # print(f"Header found in sheet1 '{sheet}': {header}")
             header = header[first_col_index:]
 
             cols_to_keep_index = next((i for i, val in enumerate(header) if str(val).strip().lower() == self.income_headers[-1]), None)
@@ -71,7 +71,7 @@ class IncomeDataLoader:
             df.dropna(axis=0, how='all', inplace=True)  # Drop rows that are completely empty
             var_name = f"{sheet}"
             self.dataframes[var_name] = df
-            logging.info(f"Loaded data from sheet: {sheet} into '{var_name}'")
+            # logging.info(f"Loaded data from sheet: {sheet} into '{var_name}'")
 
     def get_dataframes(self):
         return self.dataframes
