@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from rapidfuzz import fuzz, process
 from income_data_loader import IncomeDataLoader
-from xlsxwriter import Workbook
+import argparse
 
 #  define a constant string for Restricted field
 RESTRICTED_FIELD = "Restricted"
@@ -432,7 +432,8 @@ def load_consolidated_data(income_headers: list, account_file_path: str = "Conso
     for branch_name in dataframes.keys():
         print(f"Loaded DataFrame: {branch_name}")
 
-    filename, _ = os.path.splitext(account_file_path)
+    filename = os.path.basename(account_file_path)
+    filename, _ = os.path.splitext(filename)
     output_excel = f"processed_{filename}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     members_df = pd.read_excel(ga_consent_file)
@@ -506,8 +507,47 @@ def cleanup_ga_consent_list(ga_consent_list : pd.DataFrame) -> pd.DataFrame:
     filtered_df[MEMBERS_ID_FIELD] = filtered_df[MEMBERS_ID_FIELD].fillna('').astype(str).str.strip()
     return filtered_df
 
+def parse_args() -> tuple:
+    """
+    python process_ga.py --folder /path/to/folder --account_file my_accounts.xlsx --consent_file my_consent.xlsx
+    """
+    parser = argparse.ArgumentParser(description="Process GA consolidated income data.")
+    parser.add_argument(
+        "--folder",
+        type=str,
+        default=".",
+        help="Path to the folder containing the Excel files (default: current directory)",
+    )
+    parser.add_argument(
+        "--account_file",
+        type=str,
+        default="ConsolidatedAccounts2024Final1_GA.xlsx",
+        help="Name of the consolidated account Excel file",
+    )
+    parser.add_argument(
+        "--consent_file",
+        type=str,
+        default="ga_consent_list.xlsx",
+        help="Name of the GA consent Excel file",
+    )
+    args = parser.parse_args()
+
+    account_file_path = os.path.join(args.folder, args.account_file)
+    consent_file_path = os.path.join(args.folder, args.consent_file)
+
+        # Validate files exist
+    if not os.path.isfile(account_file_path):
+        # logging.error(f"Account file not found: {args.account_file}")
+        exit(1)
+    if not os.path.isfile(consent_file_path):
+        # logging.error(f"GA consent file not found: {args.ga_consent_file}")
+        exit(1)
+
+    return account_file_path, consent_file_path
+
 if __name__ == "__main__":
-    load_consolidated_data(account_file_path="ConsolidatedAccounts2024Final1_GA.xlsx", income_headers=None)
+    account_file, consent_file = parse_args()
+    load_consolidated_data(account_file_path=account_file, income_headers=None)
 else:
     print("This script is intended to be run as a standalone program.")
     # If imported, the process_data function can be called directly.
