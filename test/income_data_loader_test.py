@@ -15,14 +15,14 @@ def mock_excel_file():
 @patch("income_data_loader.pd.read_excel")
 def test_find_title_row(mock_read_excel, mock_excel_file):
     mock_read_excel.return_value = mock_excel_file
-    loader = IncomeDataLoader("mock_file.xlsx")
+    loader = IncomeDataLoader("mock_file.xlsx", ["Header1", "Header2"])
     title_row = loader._find_title_row()
     assert title_row == 0  # Adjust based on expected behavior
 
 @patch("income_data_loader.pd.read_excel")
 def test_load_income_data(mock_read_excel, mock_excel_file):
     mock_read_excel.return_value = mock_excel_file
-    loader = IncomeDataLoader("mock_file.xlsx")
+    loader = IncomeDataLoader("mock_file.xlsx",["Header1", "Header2"])
     income_data = loader.load_income_data()
     assert not income_data.empty
 
